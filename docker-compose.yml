@@ -1,0 +1,65 @@
+services:
+  web:
+    build: .
+    container_name: social_ai_web
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./src:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./env/.env
+    depends_on:
+      - db
+      - redis
+
+  celery_worker:
+    build: .
+    container_name: social_ai_celery_worker
+    command: celery -A config worker -l info
+    volumes:
+      - ./src:/app
+    env_file:
+      - ./env/.env
+    depends_on:
+      - db
+      - redis
+
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: social_ai_openclaw
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    volumes:
+      - ./openclaw/data:/data
+      - ./openclaw/config:/config
+      - ./openclaw_config:/home/node/.openclaw
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+
+  db:
+    image: postgres:15
+    container_name: social_ai_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: social_ai_db
+      POSTGRES_USER: diepbh
+      POSTGRES_PASSWORD: 123456
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - ./env/.env
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: social_ai_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
