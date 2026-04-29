@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict
 
@@ -5,21 +6,26 @@ from .openclaw_analyzer import OpenClawAnalyzer
 
 
 class AIAnalysisService:
-    """
-    Service trung gian để tách Celery task ra khỏi AI engine cụ thể.
-    """
-
     def __init__(self) -> None:
         self.engine = os.getenv("AI_ENGINE", "stub")
 
-    def analyze_message(self, content: str) -> Dict[str, Any]:
+    def analyze_message(self, content: Any) -> Dict[str, Any]:
+        normalized_content = self._normalize_input(content)
+
         if self.engine in ["stub", "openclaw_service"]:
             analyzer = OpenClawAnalyzer()
-            result = analyzer.analyze_message(content)
+            result = analyzer.analyze_message(normalized_content)
             result["selected_engine"] = self.engine
             return result
 
         analyzer = OpenClawAnalyzer()
-        result = analyzer.analyze_message(content)
+        result = analyzer.analyze_message(normalized_content)
         result["selected_engine"] = "default_fallback"
         return result
+
+    def _normalize_input(self, content: Any) -> str:
+        if isinstance(content, dict):
+            return json.dumps(content, ensure_ascii=False)
+        if isinstance(content, list):
+            return json.dumps(content, ensure_ascii=False)
+        return str(content or "")

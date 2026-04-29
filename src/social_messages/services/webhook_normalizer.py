@@ -1,4 +1,8 @@
+
 from typing import Any, Dict, Optional
+from social_messages.services.admin_guard import AdminGuard
+import logging
+logger = logging.getLogger(__name__)
 
 
 class WebhookNormalizer:
@@ -12,12 +16,14 @@ class WebhookNormalizer:
         message = payload.get("message") or {}
         sender = payload.get("sender") or {}
         recipient = payload.get("recipient") or {}
-
+        sender_id = sender.get("id") or payload.get("user_id") or payload.get("fromuid")
         text = message.get("text") or payload.get("text") or ""
         msg_id = message.get("msg_id") or payload.get("msg_id") or payload.get("message_id")
         user_id = sender.get("id") or payload.get("user_id") or payload.get("fromuid")
         oa_id = recipient.get("id") or payload.get("oa_id")
-
+        
+        sender_type = "admin" if AdminGuard().is_zalo_admin(sender_id) else "customer"
+        logger.warning("Zalo message_id: %s, sender_id: %s, sender_type: %s", msg_id, sender_id, sender_type)
         if not msg_id or not user_id:
             return None
 
@@ -27,11 +33,11 @@ class WebhookNormalizer:
             "customer_id": str(user_id),
             "customer_name": payload.get("display_name") or payload.get("user_name"),
             "platform_message_id": str(msg_id),
-            "sender_id": str(user_id),
-            "sender_type": "customer",
+            "sender_type": sender_type,
             "message_type": "text",
             "content": text,
             "raw_payload": payload,
+            "sender_id": str(sender_id),
         }
 
     def normalize_facebook_message(self, payload: Dict[str, Any]) -> list[Dict[str, Any]]:

@@ -7,3 +7,4 @@ openpyxl==3.1.5
 gunicorn==22.0.0
 python-dotenv==1.0.1
 requests==2.32.3
+django-jazzmin==2.5.0

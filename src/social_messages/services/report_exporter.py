@@ -1,10 +1,12 @@
 from collections import Counter
 from pathlib import Path
-
+import re
 from django.conf import settings
 from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.utils import get_column_letter
 
-from social_messages.models import Message, MessageAnalysis, Report
+from social_messages.models import IntakeSubmission, Report
 
 
 class DailyReportExporter:
@@ -15,121 +17,232 @@ class DailyReportExporter:
         workbook = Workbook()
 
         summary_sheet = workbook.active
-        summary_sheet.title = "Tong_quan"
+        summary_sheet.title = "Tổng quan"
 
-        detail_sheet = workbook.create_sheet("Chi_tiet_tin_nhan")
-        analysis_sheet = workbook.create_sheet("Phan_tich_AI")
+        submission_sheet = workbook.create_sheet("Hồ sơ tiếp nhận")
 
-        messages = Message.objects.select_related(
+        submissions = IntakeSubmission.objects.select_related(
             "conversation",
             "conversation__channel",
-        ).filter(
-            sent_at__gte=self.report.from_time,
-            sent_at__lte=self.report.to_time,
-        ).order_by("sent_at")
-
-        analyses = MessageAnalysis.objects.select_related(
             "message",
-            "message__conversation",
-            "message__conversation__channel",
         ).filter(
-            message__sent_at__gte=self.report.from_time,
-            message__sent_at__lte=self.report.to_time,
-        )
+            created_at__gte=self.report.from_time,
+            created_at__lte=self.report.to_time,
+        ).exclude(
+            message__sender_type="admin"
+        ).order_by("created_at")
 
-        total_messages = messages.count()
-        total_conversations = messages.values("conversation_id").distinct().count()
+        total_submissions = submissions.count()
+        total_conversations = submissions.values("conversation_id").distinct().count()
 
+        intent_counter = Counter()
         topic_counter = Counter()
         sentiment_counter = Counter()
         priority_counter = Counter()
+        status_counter = Counter()
+        platform_counter = Counter()
 
-        for analysis in analyses:
-            if analysis.topic:
-                topic_counter[analysis.topic] += 1
-            if analysis.sentiment:
-                sentiment_counter[analysis.sentiment] += 1
-            if analysis.priority:
-                priority_counter[analysis.priority] += 1
+        for submission in submissions:
+            intent_counter[self._display_intent(submission.intent)] += 1
+            status_counter[self._display_status(submission.status)] += 1
 
-        summary_sheet.append(["Muc", "Gia_tri"])
-        summary_sheet.append(["Tieu de bao cao", self.report.title])
-        summary_sheet.append(["Tu thoi gian", self.report.from_time.strftime("%Y-%m-%d %H:%M:%S")])
-        summary_sheet.append(["Den thoi gian", self.report.to_time.strftime("%Y-%m-%d %H:%M:%S")])
-        summary_sheet.append(["Tong so tin nhan", total_messages])
-        summary_sheet.append(["Tong so hoi thoai", total_conversations])
-        summary_sheet.append([])
+            if submission.topic:
+                topic_counter[submission.topic] += 1
+            if submission.sentiment:
+                sentiment_counter[submission.sentiment] += 1
+            if submission.priority:
+                priority_counter[self._display_priority(submission.priority)] += 1
 
-        summary_sheet.append(["Thong ke theo chu de", "So luong"])
-        for topic, count in topic_counter.most_common():
-            summary_sheet.append([topic, count])
+            if submission.conversation and submission.conversation.channel:
+                platform_counter[self._display_platform(submission.conversation.channel.platform)] += 1
 
-        summary_sheet.append([])
-        summary_sheet.append(["Thong ke theo cam xuc", "So luong"])
-        for sentiment, count in sentiment_counter.most_common():
-            summary_sheet.append([sentiment, count])
+        self._build_summary_sheet(
+            summary_sheet=summary_sheet,
+            total_submissions=total_submissions,
+            total_conversations=total_conversations,
+            intent_counter=intent_counter,
+            status_counter=status_counter,
+            platform_counter=platform_counter,
+            topic_counter=topic_counter,
+            sentiment_counter=sentiment_counter,
+            priority_counter=priority_counter,
+        )
 
-        summary_sheet.append([])
-        summary_sheet.append(["Thong ke theo muc uu tien", "So luong"])
-        for priority, count in priority_counter.most_common():
-            summary_sheet.append([priority, count])
+        self._build_submission_sheet(submission_sheet, submissions)
 
-        detail_sheet.append([
-            "Message ID",
-            "Platform",
-            "Channel",
-            "Customer ID",
-            "Customer Name",
-            "Sender Type",
-            "Message Type",
-            "Content",
-            "Sent At",
-        ])
-
-        for message in messages:
-            detail_sheet.append([
-                message.platform_message_id,
-                message.conversation.channel.platform,
-                message.conversation.channel.name,
-                message.conversation.customer_id,
-                message.conversation.customer_name,
-                message.sender_type,
-                message.message_type,
-                message.content,
-                message.sent_at.strftime("%Y-%m-%d %H:%M:%S"),
-            ])
-
-        analysis_sheet.append([
-            "Message ID",
-            "Platform",
-            "Customer Name",
-            "Topic",
-            "Sentiment",
-            "Priority",
-            "Summary",
-            "Status",
-            "Processed At",
-        ])
-
-        for analysis in analyses.order_by("message__sent_at"):
-            analysis_sheet.append([
-                analysis.message.platform_message_id,
-                analysis.message.conversation.channel.platform,
-                analysis.message.conversation.customer_name,
-                analysis.topic,
-                analysis.sentiment,
-                analysis.priority,
-                analysis.summary,
-                analysis.status,
-                analysis.processed_at.strftime("%Y-%m-%d %H:%M:%S") if analysis.processed_at else "",
-            ])
+        self._style_sheet(summary_sheet)
+        self._style_sheet(submission_sheet)
 
         reports_dir = Path(settings.MEDIA_ROOT) / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = f"daily_report_{self.report.id}.xlsx"
+        safe_title = re.sub(r"[^\w\s-]", "", self.report.title)
+        safe_title = safe_title.strip().replace(" ", "_")
+
+        filename = f"{safe_title}_{self.report.id}.xlsx"
         file_path = reports_dir / filename
 
         workbook.save(file_path)
 
         return str(file_path)
+
+    def _build_summary_sheet(
+        self,
+        summary_sheet,
+        total_submissions,
+        total_conversations,
+        intent_counter,
+        status_counter,
+        platform_counter,
+        topic_counter,
+        sentiment_counter,
+        priority_counter,
+    ):
+        summary_sheet.append(["Nội dung", "Giá trị"])
+        summary_sheet.append(["Tiêu đề báo cáo", self.report.title])
+        summary_sheet.append(["Từ thời gian", self.report.from_time.strftime("%d/%m/%Y %H:%M:%S")])
+        summary_sheet.append(["Đến thời gian", self.report.to_time.strftime("%d/%m/%Y %H:%M:%S")])
+        summary_sheet.append(["Tổng số hồ sơ tiếp nhận", total_submissions])
+        summary_sheet.append(["Tổng số hội thoại có hồ sơ", total_conversations])
+        summary_sheet.append([])
+
+        self._append_counter(summary_sheet, "Thống kê theo loại hồ sơ", intent_counter)
+        self._append_counter(summary_sheet, "Thống kê theo trạng thái xử lý", status_counter)
+        self._append_counter(summary_sheet, "Thống kê theo nền tảng", platform_counter)
+        self._append_counter(summary_sheet, "Thống kê theo chủ đề", topic_counter)
+        self._append_counter(summary_sheet, "Thống kê theo cảm xúc", sentiment_counter)
+        self._append_counter(summary_sheet, "Thống kê theo mức ưu tiên", priority_counter)
+
+    def _build_submission_sheet(self, sheet, submissions):
+        sheet.append([
+            "Mã hồ sơ",
+            "Nền tảng",
+            "Kênh tiếp nhận",
+            "Mã hội thoại",
+            "Loại hồ sơ",
+            "Họ tên người gửi",
+            "Số điện thoại",
+            "Địa chỉ",
+            "Nội dung tiếp nhận",
+            "Thời gian xảy ra",
+            "Địa điểm xảy ra",
+            "Đối tượng liên quan",
+            "Mức độ khẩn cấp",
+            "Chủ đề",
+            "Cảm xúc",
+            "Mức ưu tiên",
+            "Tóm tắt",
+            "Nội dung phản hồi",
+            "Trạng thái xử lý",
+            "Thời gian tạo hồ sơ",
+        ])
+
+        for submission in submissions:
+            channel = submission.conversation.channel
+
+            sheet.append([
+                submission.id,
+                self._display_platform(channel.platform),
+                channel.name,
+                submission.conversation_id,
+                self._display_intent(submission.intent),
+                submission.citizen_name,
+                submission.phone_number,
+                submission.address,
+                submission.content,
+                submission.event_time,
+                submission.event_location,
+                submission.related_person,
+                submission.urgency_level,
+                submission.topic,
+                submission.sentiment,
+                self._display_priority(submission.priority),
+                submission.summary,
+                submission.response_text,
+                self._display_status(submission.status),
+                submission.created_at.strftime("%d/%m/%Y %H:%M:%S"),
+            ])
+
+    def _append_counter(self, sheet, title, counter):
+        sheet.append([])
+        sheet.append([title, "Số lượng"])
+
+        if not counter:
+            sheet.append(["Không có dữ liệu", 0])
+            return
+
+        for label, count in counter.most_common():
+            sheet.append([label, count])
+
+    def _style_sheet(self, sheet):
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True)
+
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(
+                    vertical="top",
+                    wrap_text=True,
+                )
+
+        for cell in sheet[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
+        for column_cells in sheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column_cells[0].column)
+
+            for cell in column_cells:
+                value = cell.value
+                if value is None:
+                    continue
+
+                value_length = len(str(value))
+                if value_length > max_length:
+                    max_length = value_length
+
+            adjusted_width = min(max(max_length + 2, 14), 60)
+            sheet.column_dimensions[column_letter].width = adjusted_width
+
+        sheet.freeze_panes = "A2"
+
+    def _display_platform(self, platform):
+        mapping = {
+            "zalo": "Zalo OA",
+            "facebook": "Facebook Messenger",
+        }
+        return mapping.get(platform, platform or "")
+
+    def _display_intent(self, intent):
+        mapping = {
+            "complaint": "Khiếu nại",
+            "crime_report": "Tin báo tội phạm",
+            "admin_procedure": "Hỏi thủ tục hành chính",
+        }
+        return mapping.get(intent, intent or "")
+
+    def _display_status(self, status):
+        mapping = {
+            "received": "Đã tiếp nhận",
+            "validated": "Hợp lệ",
+            "analyzed": "Đã phân tích",
+            "responded": "Đã phản hồi",
+            "rejected": "Không hợp lệ",
+        }
+        return mapping.get(status, status or "")
+
+    def _display_priority(self, priority):
+        mapping = {
+            "low": "Thấp",
+            "normal": "Bình thường",
+            "medium": "Trung bình",
+            "high": "Cao",
+            "urgent": "Khẩn cấp",
+        }
+        return mapping.get(priority, priority or "")

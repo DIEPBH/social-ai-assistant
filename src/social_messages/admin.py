@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models import Channel, Conversation, Message, MessageAnalysis, Report
+from .models import Channel, Conversation, Message, MessageAnalysis, Report, IntakeSubmission
 
 
 @admin.register(Channel)
@@ -13,8 +13,17 @@ class ChannelAdmin(admin.ModelAdmin):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ("id", "channel", "customer_id", "customer_name", "status", "last_message_at", "created_at")
-    search_fields = ("customer_id", "customer_name")
+    list_display = (
+        "id",
+        "channel",
+        "customer_id",
+        "customer_name",
+        "current_state",
+        "current_intent",
+        "form_retry_count",
+        "updated_at",
+    )
+    search_fields = ("customer_id", "customer_name", "channel__name")
     list_filter = ("status", "channel")
 
 
@@ -35,3 +44,16 @@ class ReportAdmin(admin.ModelAdmin):
     list_display = ("id", "title", "report_type", "status", "from_time", "to_time", "file_name", "created_at", "completed_at")
     search_fields = ("title", "file_name", "note")
     list_filter = ("report_type", "status")
+
+@admin.register(IntakeSubmission)
+class IntakeSubmissionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "intent",
+        "citizen_name",
+        "phone_number",
+        "status",
+        "created_at",
+    )
+    search_fields = ("citizen_name", "phone_number", "content")
+    list_filter = ("intent", "status", "created_at")

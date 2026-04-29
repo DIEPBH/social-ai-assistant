@@ -1,89 +1,20 @@
 import json
 import logging
-from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.dateparse import parse_datetime
-from django.utils import timezone
+logger = logging.getLogger(__name__)
+
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
+
+from social_messages.models import Channel, Conversation, IntakeSubmission, Message
+from social_messages.services.intake_router import IntakeRouter
+from social_messages.services.outbound_message_service import OutboundMessageService
 from social_messages.services.webhook_normalizer import WebhookNormalizer
-from social_messages.models import Channel, Conversation, Message
-from social_messages.tasks import process_message_analysis, process_admin_command
+from social_messages.tasks import process_intake_submission, process_admin_command
+from social_messages.services.admin_guard import AdminGuard
 
-
-def save_incoming_message(data):
-    platform = data["platform"]
-    channel_external_id = data["channel_external_id"]
-    customer_id = data["customer_id"]
-    customer_name = data.get("customer_name")
-    platform_message_id = data["platform_message_id"]
-    sender_id = data["sender_id"]
-    sender_type = data["sender_type"]
-    message_type = data.get("message_type", "text")
-    content = data.get("content", "")
-    raw_payload = data.get("raw_payload", data)
-
-    sent_at_str = data.get("sent_at")
-    if sent_at_str:
-        sent_at = parse_datetime(sent_at_str)
-        if sent_at is None:
-            sent_at = timezone.now()
-    else:
-        sent_at = timezone.now()
-
-    channel = Channel.objects.get(
-        external_id=channel_external_id,
-        platform=platform,
-        is_active=True,
-    )
-
-    conversation, _ = Conversation.objects.get_or_create(
-        channel=channel,
-        customer_id=customer_id,
-        defaults={
-            "customer_name": customer_name,
-            "last_message_at": sent_at,
-            "status": "open",
-        }
-    )
-
-    if customer_name and conversation.customer_name != customer_name:
-        conversation.customer_name = customer_name
-
-    conversation.last_message_at = sent_at
-    conversation.save()
-
-    message, created = Message.objects.get_or_create(
-        platform_message_id=platform_message_id,
-        defaults={
-            "conversation": conversation,
-            "sender_id": sender_id,
-            "sender_type": sender_type,
-            "message_type": message_type,
-            "content": content,
-            "sent_at": sent_at,
-            "raw_payload": raw_payload,
-        }
-    )
-
-    analysis_task_id = None
-    command_task_id = None
-
-    if created:
-        analysis_task = process_message_analysis.delay(message.id)
-        analysis_task_id = analysis_task.id
-
-        if platform == "zalo" and sender_type == "customer":
-            command_task = process_admin_command.delay(message.id)
-            command_task_id = command_task.id
-
-    return {
-        "message": message,
-        "created": created,
-        "analysis_task_id": analysis_task_id,
-        "command_task_id": command_task_id,
-        "conversation_id": conversation.id,
-        "channel_id": channel.id,
-    }
 
 
 @csrf_exempt
@@ -97,18 +28,12 @@ def health_check(request):
 @csrf_exempt
 def test_message_webhook(request):
     if request.method != "POST":
-        return JsonResponse(
-            {"error": "Only POST method is allowed"},
-            status=405,
-        )
+        return JsonResponse({"error": "Only POST method is allowed"}, status=405)
 
     try:
         data = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
-        return JsonResponse(
-            {"error": "Invalid JSON"},
-            status=400,
-        )
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     required_fields = [
         "platform",
@@ -131,32 +56,24 @@ def test_message_webhook(request):
         )
 
     try:
-        result = save_incoming_message(data)
+        result = handle_incoming(data)
     except Channel.DoesNotExist:
-        return JsonResponse(
-            {"error": "Channel not found or inactive"},
-            status=404,
-        )
+        return JsonResponse({"error": "Channel not found or inactive"}, status=404)
+    except Exception as exc:
+        logger.exception("test_message_webhook failed")
+        return JsonResponse({"error": str(exc)}, status=500)
 
-    return JsonResponse({
-        "status": "success",
-        "created": result["created"],
-        "message_id": result["message"].id,
-        "conversation_id": result["conversation_id"],
-        "channel_id": result["channel_id"],
-        "analysis_task_id": result["analysis_task_id"],
-        "command_task_id": result["command_task_id"],
-    })
-
+    return JsonResponse(result, status=200)
 
 
 @csrf_exempt
 def facebook_webhook(request):
+    logger.info("FACEBOOK WEBHOOK HIT method=%s body=%s", request.method, request.body.decode("utf-8"))
     if request.method == "GET":
         mode = request.GET.get("hub.mode")
         verify_token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
-        
+
         if mode == "subscribe" and verify_token == settings.FACEBOOK_VERIFY_TOKEN:
             return HttpResponse(challenge, content_type="text/plain")
 
@@ -171,18 +88,28 @@ def facebook_webhook(request):
         normalizer = WebhookNormalizer()
         normalized_messages = normalizer.normalize_facebook_message(payload)
 
-        saved_count = 0
+        processed_count = 0
+        failed_count = 0
+
         for item in normalized_messages:
             try:
-                save_incoming_message(item)
-                saved_count += 1
+                handle_incoming(item)
+                processed_count += 1
             except Channel.DoesNotExist:
-                continue
+                failed_count += 1
+                logger.warning("Facebook channel not found for payload: %s", item)
+            except Exception:
+                failed_count += 1
+                logger.exception("facebook_webhook failed for one message")
 
-        return JsonResponse({
-            "status": "accepted",
-            "saved_count": saved_count,
-        }, status=200)
+        return JsonResponse(
+            {
+                "status": "accepted",
+                "processed_count": processed_count,
+                "failed_count": failed_count,
+            },
+            status=200,
+        )
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
@@ -199,49 +126,28 @@ def zalo_webhook(request):
 
     normalizer = WebhookNormalizer()
     normalized = normalizer.normalize_zalo_message(payload)
-
+    
     if not normalized:
-        return JsonResponse({
-            "status": "ignored",
-            "reason": "unsupported_or_unmapped_payload",
-            "payload_received": True,
-        }, status=200)
+        logger.warning("Zalo payload ignored because it could not be normalized: %s", payload)
+        return JsonResponse(
+            {
+                "status": "ignored",
+                "reason": "unsupported_or_unmapped_payload",
+                "payload_received": True,
+            },
+            status=200,
+        )
 
     try:
-        result = save_incoming_message(normalized)
+        result = handle_incoming(normalized)
     except Channel.DoesNotExist:
         return JsonResponse({"error": "Channel not found or inactive"}, status=404)
+    except Exception as exc:
+        logger.exception("zalo_webhook failed")
+        return JsonResponse({"error": str(exc)}, status=500)
 
-    return JsonResponse({
-        "status": "accepted",
-        "created": result["created"],
-        "message_id": result["message"].id,
-        "analysis_task_id": result["analysis_task_id"],
-        "command_task_id": result["command_task_id"],
-    }, status=200)
+    return JsonResponse(result, status=200)
 
-
-
-@csrf_exempt
-def zalo_webhook_test(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "method_not_allowed"}, status=405)
-
-    raw_body = request.body.decode("utf-8", errors="ignore").strip()
-
-    # Cho phép body rỗng khi Zalo/Developer test webhook
-    if not raw_body:
-        return JsonResponse({"status": "ok", "message": "empty body accepted"}, status=200)
-
-    try:
-        payload = json.loads(raw_body)
-    except json.JSONDecodeError:
-        # Tạm thời vẫn trả 200 để vượt qua bước xác thực webhook
-        return JsonResponse({"status": "ok", "message": "invalid json ignored"}, status=200)
-
-
-    # TODO: xử lý payload thật ở đây
-    return JsonResponse({"status": "ok"}, status=200)
 
 @csrf_exempt
 def zalo_oauth_callback(request):
@@ -255,4 +161,224 @@ def zalo_oauth_callback(request):
         "state": state,
         "error": error,
         "full_query": request.GET.dict(),
+    })
+
+def handle_incoming(payload):
+    logger.warning("sender_id: %s", payload.get("sender_id"))
+    conversation = get_or_create_conversation(payload)
+    user_text = extract_user_text(payload)
+    guard = AdminGuard()
+    
+    if guard.is_admin_message(
+        platform=payload.get("platform", ""),
+        sender_id=payload.get("sender_id", ""),
+    ):  
+        
+        return handle_admin_incoming(conversation, payload, user_text)
+
+    return handle_citizen_incoming(conversation, payload, user_text)
+
+def handle_admin_incoming(conversation, payload, user_text):
+    sent_at = parse_sent_at(payload.get("sent_at"))
+
+    message, created = Message.objects.get_or_create(
+        platform_message_id=payload.get("platform_message_id", ""),
+        defaults={
+            "conversation": conversation,
+            "sender_id": payload.get("sender_id", ""),
+            "sender_type": payload.get("sender_type", "admin"),
+            "message_type": payload.get("message_type", "text"),
+            "content": user_text,
+            "sent_at": sent_at,
+            "raw_payload": payload.get("raw_payload", payload),
+        },
+    )
+    task = process_admin_command.delay(message.id)
+
+    return {
+        "status": "admin_queued",
+        "created": created,
+        "message_id": message.id,
+        "task_id": task.id,
+        "conversation_id": conversation.id,
+    }
+
+
+def handle_citizen_incoming(conversation, payload, user_text):
+    router = IntakeRouter()
+    route_result = router.route(conversation=conversation, user_text=user_text)
+
+    if route_result["action"] == "reply_only":
+        reply_text = route_result["reply_text"]
+        outbound_result = send_reply_to_platform(conversation, reply_text)
+
+        return {
+            "status": "reply_only",
+            "conversation_id": conversation.id,
+            "reply_text": reply_text,
+            "outbound_result": outbound_result,
+        }
+
+    if route_result["action"] == "save_and_process":
+        sent_at = parse_sent_at(payload.get("sent_at"))
+
+        message, created = Message.objects.get_or_create(
+            platform_message_id=payload.get("platform_message_id", ""),
+            defaults={
+                "conversation": conversation,
+                "sender_id": payload.get("sender_id", ""),
+                "sender_type": "admin" if AdminGuard().is_zalo_admin(payload.get("sender_id", "")) else "customer",
+                "message_type": payload.get("message_type", "text"),
+                "content": user_text,
+                "sent_at": sent_at,
+                "raw_payload": payload.get("raw_payload", payload),
+            },
+        )
+
+        cleaned = route_result["cleaned_data"]
+
+        submission = IntakeSubmission.objects.create(
+            conversation=conversation,
+            message=message,
+            intent=route_result["intent"],
+            citizen_name=cleaned.get("họ tên", ""),
+            phone_number=cleaned.get("số điện thoại", ""),
+            address=cleaned.get("địa chỉ", "") or cleaned.get("địa chỉ liên hệ", ""),
+            content=(
+                cleaned.get("nội dung khiếu nại", "")
+                or cleaned.get("nội dung vụ việc", "")
+                or cleaned.get("nội dung", "")
+            ),
+            event_time=cleaned.get("thời gian", ""),
+            event_location=cleaned.get("địa điểm", ""),
+            related_person=cleaned.get("đối tượng liên quan", ""),
+            urgency_level=cleaned.get("mức độ khẩn cấp", ""),
+            topic="",
+            sentiment="",
+            priority="",
+            summary="",
+            response_text="",
+            raw_extracted_data=cleaned,
+            status="validated",
+        )
+
+        conversation.current_state = ""
+        conversation.current_intent = ""
+        conversation.form_retry_count = 0
+        conversation.last_bot_prompt = ""
+        conversation.save(update_fields=[
+            "current_state",
+            "current_intent",
+            "form_retry_count",
+            "last_bot_prompt",
+            "updated_at",
+        ])
+
+        task = process_intake_submission.delay(submission.id)
+
+        return {
+            "status": "saved_and_queued",
+            "created": created,
+            "message_id": message.id,
+            "submission_id": submission.id,
+            "task_id": task.id,
+            "conversation_id": conversation.id,
+        }
+
+    return {
+        "status": "ignored",
+        "reason": "unknown_route_action",
+        "conversation_id": conversation.id,
+    }
+
+
+def get_or_create_conversation(data):
+    platform = data["platform"]
+    channel_external_id = data["channel_external_id"]
+    customer_id = data["customer_id"]
+    customer_name = data.get("customer_name", "")
+
+    sent_at = parse_sent_at(data.get("sent_at"))
+
+    channel = Channel.objects.get(
+        external_id=channel_external_id,
+        platform=platform,
+        is_active=True,
+    )
+
+    conversation, _ = Conversation.objects.get_or_create(
+        channel=channel,
+        customer_id=customer_id,
+        defaults={
+            "customer_name": customer_name,
+            "last_message_at": sent_at,
+            "status": "open",
+        },
+    )
+
+    updated_fields = []
+
+    if customer_name and conversation.customer_name != customer_name:
+        conversation.customer_name = customer_name
+        updated_fields.append("customer_name")
+
+    conversation.last_message_at = sent_at
+    updated_fields.append("last_message_at")
+
+    if updated_fields:
+        updated_fields.append("updated_at")
+        conversation.save(update_fields=updated_fields)
+
+    return conversation
+
+
+def extract_user_text(payload):
+    return (payload.get("content") or "").strip()
+
+
+def parse_sent_at(sent_at_str):
+    if sent_at_str:
+        sent_at = parse_datetime(sent_at_str)
+        if sent_at is not None:
+            return sent_at
+    return timezone.now()
+
+
+def send_reply_to_platform(conversation, reply_text):
+    try:
+        service = OutboundMessageService()
+        result = service.send_text(conversation, reply_text)
+
+        logger.info(
+            "OUTBOUND REPLY platform=%s conversation_id=%s result=%s",
+            conversation.channel.platform,
+            conversation.id,
+            result,
+        )
+        return result
+    except Exception as exc:
+        logger.exception(
+            "Failed sending outbound reply platform=%s conversation_id=%s",
+            conversation.channel.platform,
+            conversation.id,
+        )
+        return {
+            "status": "error",
+            "error": str(exc),
+        }
+
+@csrf_exempt
+def debug_conversation(request, customer_id):
+    from social_messages.models import Conversation
+
+    c = Conversation.objects.filter(customer_id=customer_id).last()
+
+    if not c:
+        return JsonResponse({"error": "not found"}, status=404)
+
+    return JsonResponse({
+        "id": c.id,
+        "state": c.current_state,
+        "intent": c.current_intent,
+        "retry": c.form_retry_count,
     })

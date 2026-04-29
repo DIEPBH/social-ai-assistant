@@ -23,6 +23,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 INSTALLED_APPS = [
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -122,9 +123,97 @@ ZALO_ADMIN_SENDER_IDS = [
 FACEBOOK_VERIFY_TOKEN = os.getenv("FACEBOOK_VERIFY_TOKEN", "")
 ZALO_WEBHOOK_SECRET = os.getenv("ZALO_WEBHOOK_SECRET", "")
 
+ZALO_APP_ID = os.getenv("ZALO_APP_ID", "")
+ZALO_APP_SECRET = os.getenv("ZALO_APP_SECRET", "")
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 CSRF_TRUSTED_ORIGINS = [
     "https://webhook.socialai.id.vn",
 ]
 
+
+
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",  # 👈 Quan trọng
+    },
+}
+
+# Cấu hình Jazzmin
+JAZZMIN_SETTINGS = {
+    "site_title": "Social AI Assistant",
+    "site_header": "Social AI Assistant",
+    "site_brand": "Social AI Admin",
+    "welcome_sign": "Trang quản trị hệ thống tiếp nhận phản ánh",
+    "copyright": "Social AI Assistant",
+
+    "show_sidebar": True,
+    "navigation_expanded": True,
+
+    "topmenu_links": [
+        {"name": "Trang chủ", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Xem website", "url": "/", "new_window": True},
+    ],
+
+    "order_with_respect_to": [
+        "social_messages.Channel",
+        "social_messages.Conversation",
+        "social_messages.Message",
+        "social_messages.IntakeSubmission",
+        "social_messages.MessageAnalysis",
+        "social_messages.Report",
+        "auth.User",
+        "auth.Group",
+    ],
+
+    "icons": {
+        "social_messages.Channel": "fas fa-broadcast-tower",
+        "social_messages.Conversation": "fas fa-comments",
+        "social_messages.Message": "fas fa-envelope",
+        "social_messages.IntakeSubmission": "fas fa-folder-open",
+        "social_messages.MessageAnalysis": "fas fa-brain",
+        "social_messages.Report": "fas fa-file-excel",
+        "auth.User": "fas fa-user",
+        "auth.Group": "fas fa-users",
+    },
+
+    "default_icon_parents": "fas fa-folder",
+    "default_icon_children": "fas fa-circle",
+
+    "changeform_format": "horizontal_tabs",
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "theme": "flatly",
+    "dark_mode_theme": "darkly",
+    "navbar": "navbar-primary navbar-dark",
+    "sidebar": "sidebar-dark-primary",
+    "brand_colour": "navbar-primary",
+    "accent": "accent-primary",
+    "button_classes": {
+        "primary": "btn btn-primary",
+        "secondary": "btn btn-outline-secondary",
+        "info": "btn btn-info",
+        "warning": "btn btn-warning",
+        "danger": "btn btn-danger",
+        "success": "btn btn-success",
+    },
+}
+
+
+CELERY_BEAT_SCHEDULE = {
+    "refresh-zalo-tokens-every-30-minutes": {
+        "task": "social_messages.tasks.refresh_all_zalo_tokens_if_needed",
+        "schedule": 1800.0,
+    },
+}

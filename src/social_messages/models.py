@@ -16,7 +16,9 @@ class Channel(models.Model):
     webhook_secret = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    refresh_token = models.TextField(blank=True, null=True)
+    access_token_expires_at = models.DateTimeField(blank=True, null=True)
+    token_last_refreshed_at = models.DateTimeField(blank=True, null=True)
     class Meta:
         db_table = "channels"
         verbose_name = "Kênh"
@@ -33,6 +35,19 @@ class Conversation(models.Model):
         ("pending", "Chờ xử lý"),
     ]
 
+    STATE_CHOICES = [
+        ("", "Chưa khởi tạo"),
+        ("awaiting_category_selection", "Chờ chọn nhóm yêu cầu"),
+        ("awaiting_form", "Chờ người dân nhập mẫu"),
+    ]
+
+    INTENT_CHOICES = [
+        ("", "Chưa xác định"),
+        ("complaint", "Khiếu nại"),
+        ("crime_report", "Tin báo tội phạm"),
+        ("admin_procedure", "Hỏi thủ tục hành chính"),
+    ]
+
     channel = models.ForeignKey(
         Channel,
         on_delete=models.CASCADE,
@@ -42,6 +57,10 @@ class Conversation(models.Model):
     customer_name = models.CharField(max_length=255, blank=True, null=True)
     last_message_at = models.DateTimeField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
+    current_state = models.CharField(max_length=100, choices=STATE_CHOICES, blank=True, default="")
+    current_intent = models.CharField(max_length=50, choices=INTENT_CHOICES, blank=True, default="")
+    last_bot_prompt = models.TextField(blank=True, default="")
+    form_retry_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,6 +88,7 @@ class Message(models.Model):
         ("customer", "Khách hàng"),
         ("page", "Page/OA"),
         ("system", "Hệ thống"),
+        ("admin", "Quản trị viên"),
     ]
 
     conversation = models.ForeignKey(
@@ -92,7 +112,7 @@ class Message(models.Model):
         ordering = ["-sent_at"]
 
     def __str__(self):
-        return f"{self.platform_message_id} - {self.sender_type}"
+        return f"{self.platform_message_id} - {self.sender_type} - {self.message_type}"
 
 class MessageAnalysis(models.Model):
     STATUS_CHOICES = [
@@ -156,3 +176,60 @@ class Report(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.status}"
+
+class IntakeSubmission(models.Model):
+    INTENT_CHOICES = [
+        ("complaint", "Khiếu nại"),
+        ("crime_report", "Tin báo tội phạm"),
+        ("admin_procedure", "Hỏi thủ tục hành chính"),
+    ]
+
+    STATUS_CHOICES = [
+        ("received", "Đã tiếp nhận"),
+        ("validated", "Hợp lệ"),
+        ("analyzed", "Đã phân tích"),
+        ("responded", "Đã phản hồi"),
+        ("rejected", "Không hợp lệ"),
+    ]
+
+    conversation = models.ForeignKey(
+        "social_messages.Conversation",
+        on_delete=models.CASCADE,
+        related_name="intake_submissions",
+    )
+    message = models.ForeignKey(
+        "social_messages.Message",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="intake_submissions",
+    )
+    intent = models.CharField(max_length=50, choices=INTENT_CHOICES)
+
+    citizen_name = models.CharField(max_length=255, blank=True, default="")
+    phone_number = models.CharField(max_length=50, blank=True, default="")
+    address = models.TextField(blank=True, default="")
+    content = models.TextField()
+    event_time = models.CharField(max_length=255, blank=True, default="")
+    event_location = models.TextField(blank=True, default="")
+    related_person = models.TextField(blank=True, default="")
+    urgency_level = models.CharField(max_length=50, blank=True, default="")
+
+    topic = models.CharField(max_length=255, blank=True, default="")
+    sentiment = models.CharField(max_length=50, blank=True, default="")
+    priority = models.CharField(max_length=50, blank=True, default="")
+    summary = models.TextField(blank=True, default="")
+    response_text = models.TextField(blank=True, default="")
+
+    raw_extracted_data = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="received")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "intake_submissions"
+        verbose_name = "Hồ sơ tiếp nhận"
+        verbose_name_plural = "Hồ sơ tiếp nhận"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.intent} - {self.citizen_name or self.conversation_id}"
