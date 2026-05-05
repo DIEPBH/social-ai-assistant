@@ -14,6 +14,37 @@ class CommandParser:
         now = timezone.localtime()
 
         if any(k in normalized for k in [
+            "tình hình hôm nay",
+            "tinh hinh hom nay",
+            "hôm nay thế nào",
+            "hom nay the nao",
+            "tổng quan hôm nay",
+            "tong quan hom nay",
+            "tình hình trong ngày",
+            "tinh hinh trong ngay",
+        ]):
+            return {
+                "is_command": True,
+                "command_type": "today_insight",
+            }
+
+        if any(k in normalized for k in [
+            "hệ thống có lỗi không",
+            "he thong co loi khong",
+            "kiểm tra hệ thống",
+            "kiem tra he thong",
+            "trạng thái hệ thống",
+            "trang thai he thong",
+            "system status",
+            "hệ thống ổn không",
+            "he thong on khong",
+        ]):
+            return {
+                "is_command": True,
+                "command_type": "system_status",
+            }
+        
+        if any(k in normalized for k in [
             "báo cáo hôm nay",
             "bao cao hom nay",
             "báo cáo ngày hôm nay",

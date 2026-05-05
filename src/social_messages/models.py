@@ -1,7 +1,5 @@
 from django.db import models
 
-# Create your models here.
-
 
 class Channel(models.Model):
     PLATFORM_CHOICES = [
@@ -9,20 +7,21 @@ class Channel(models.Model):
         ("facebook", "Facebook Messenger"),
     ]
 
-    name = models.CharField(max_length=255)
-    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
-    external_id = models.CharField(max_length=255, unique=True)
-    access_token = models.TextField(blank=True, null=True)
-    webhook_secret = models.CharField(max_length=255, blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    refresh_token = models.TextField(blank=True, null=True)
-    access_token_expires_at = models.DateTimeField(blank=True, null=True)
-    token_last_refreshed_at = models.DateTimeField(blank=True, null=True)
+    name = models.CharField(max_length=255, verbose_name="Tên kênh")
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, verbose_name="Nền tảng")
+    external_id = models.CharField(max_length=255, unique=True, verbose_name="ID ngoài hệ thống")
+    access_token = models.TextField(blank=True, null=True, verbose_name="Access Token")
+    webhook_secret = models.CharField(max_length=255, blank=True, null=True, verbose_name="Webhook Secret")
+    is_active = models.BooleanField(default=True, verbose_name="Đang hoạt động")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
+    refresh_token = models.TextField(blank=True, null=True, verbose_name="Refresh Token")
+    access_token_expires_at = models.DateTimeField(blank=True, null=True, verbose_name="Hết hạn token")
+    token_last_refreshed_at = models.DateTimeField(blank=True, null=True, verbose_name="Lần refresh gần nhất")
+
     class Meta:
         db_table = "channels"
-        verbose_name = "Kênh"
-        verbose_name_plural = "Kênh"
+        verbose_name = "Kênh tiếp nhận"
+        verbose_name_plural = "Kênh tiếp nhận"
 
     def __str__(self):
         return f"{self.name} ({self.platform})"
@@ -38,36 +37,37 @@ class Conversation(models.Model):
     STATE_CHOICES = [
         ("", "Chưa khởi tạo"),
         ("awaiting_category_selection", "Chờ chọn nhóm yêu cầu"),
-        ("awaiting_form", "Chờ người dân nhập mẫu"),
+        ("awaiting_form", "Chờ nhập thông tin"),
     ]
 
     INTENT_CHOICES = [
         ("", "Chưa xác định"),
         ("complaint", "Khiếu nại"),
         ("crime_report", "Tin báo tội phạm"),
-        ("admin_procedure", "Hỏi thủ tục hành chính"),
+        ("admin_procedure", "Thủ tục hành chính"),
     ]
 
     channel = models.ForeignKey(
         Channel,
         on_delete=models.CASCADE,
         related_name="conversations",
+        verbose_name="Kênh"
     )
-    customer_id = models.CharField(max_length=255)
-    customer_name = models.CharField(max_length=255, blank=True, null=True)
-    last_message_at = models.DateTimeField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
-    current_state = models.CharField(max_length=100, choices=STATE_CHOICES, blank=True, default="")
-    current_intent = models.CharField(max_length=50, choices=INTENT_CHOICES, blank=True, default="")
-    last_bot_prompt = models.TextField(blank=True, default="")
-    form_retry_count = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    customer_id = models.CharField(max_length=255, verbose_name="ID khách hàng")
+    customer_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Tên khách hàng")
+    last_message_at = models.DateTimeField(blank=True, null=True, verbose_name="Tin nhắn cuối")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open", verbose_name="Trạng thái")
+    current_state = models.CharField(max_length=100, choices=STATE_CHOICES, blank=True, default="", verbose_name="Trạng thái luồng")
+    current_intent = models.CharField(max_length=50, choices=INTENT_CHOICES, blank=True, default="", verbose_name="Loại yêu cầu")
+    last_bot_prompt = models.TextField(blank=True, default="", verbose_name="Câu hỏi gần nhất của bot")
+    form_retry_count = models.IntegerField(default=0, verbose_name="Số lần nhập lại form")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
 
     class Meta:
         db_table = "conversations"
-        verbose_name = "Hội thoại"
-        verbose_name_plural = "Hội thoại"
+        verbose_name = "Cuộc hội thoại"
+        verbose_name_plural = "Cuộc hội thoại"
         unique_together = ("channel", "customer_id")
 
     def __str__(self):
@@ -76,12 +76,12 @@ class Conversation(models.Model):
 
 class Message(models.Model):
     MESSAGE_TYPE_CHOICES = [
-        ("text", "Text"),
-        ("image", "Image"),
-        ("file", "File"),
-        ("audio", "Audio"),
+        ("text", "Văn bản"),
+        ("image", "Hình ảnh"),
+        ("file", "Tệp"),
+        ("audio", "Âm thanh"),
         ("video", "Video"),
-        ("other", "Other"),
+        ("other", "Khác"),
     ]
 
     SENDER_TYPE_CHOICES = [
@@ -95,15 +95,16 @@ class Message(models.Model):
         Conversation,
         on_delete=models.CASCADE,
         related_name="messages",
+        verbose_name="Cuộc hội thoại"
     )
-    platform_message_id = models.CharField(max_length=255, unique=True)
-    sender_id = models.CharField(max_length=255)
-    sender_type = models.CharField(max_length=20, choices=SENDER_TYPE_CHOICES)
-    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default="text")
-    content = models.TextField(blank=True, null=True)
-    sent_at = models.DateTimeField()
-    raw_payload = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    platform_message_id = models.CharField(max_length=255, unique=True, verbose_name="ID tin nhắn nền tảng")
+    sender_id = models.CharField(max_length=255, verbose_name="ID người gửi")
+    sender_type = models.CharField(max_length=20, choices=SENDER_TYPE_CHOICES, verbose_name="Loại người gửi")
+    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default="text", verbose_name="Loại tin nhắn")
+    content = models.TextField(blank=True, null=True, verbose_name="Nội dung")
+    sent_at = models.DateTimeField(verbose_name="Thời gian gửi")
+    raw_payload = models.JSONField(default=dict, blank=True, verbose_name="Dữ liệu thô")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
 
     class Meta:
         db_table = "messages"
@@ -112,7 +113,8 @@ class Message(models.Model):
         ordering = ["-sent_at"]
 
     def __str__(self):
-        return f"{self.platform_message_id} - {self.sender_type} - {self.message_type}"
+        return f"{self.platform_message_id} - {self.sender_type}"
+
 
 class MessageAnalysis(models.Model):
     STATUS_CHOICES = [
@@ -125,24 +127,26 @@ class MessageAnalysis(models.Model):
         Message,
         on_delete=models.CASCADE,
         related_name="analysis",
+        verbose_name="Tin nhắn"
     )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    topic = models.CharField(max_length=255, blank=True, null=True)
-    sentiment = models.CharField(max_length=50, blank=True, null=True)
-    priority = models.CharField(max_length=50, blank=True, null=True)
-    summary = models.TextField(blank=True, null=True)
-    result_payload = models.JSONField(default=dict, blank=True)
-    error_message = models.TextField(blank=True, null=True)
-    processed_at = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="Trạng thái")
+    topic = models.CharField(max_length=255, blank=True, null=True, verbose_name="Chủ đề")
+    sentiment = models.CharField(max_length=50, blank=True, null=True, verbose_name="Cảm xúc")
+    priority = models.CharField(max_length=50, blank=True, null=True, verbose_name="Độ ưu tiên")
+    summary = models.TextField(blank=True, null=True, verbose_name="Tóm tắt")
+    result_payload = models.JSONField(default=dict, blank=True, verbose_name="Kết quả AI")
+    error_message = models.TextField(blank=True, null=True, verbose_name="Lỗi")
+    processed_at = models.DateTimeField(blank=True, null=True, verbose_name="Thời gian xử lý")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
 
     class Meta:
         db_table = "message_analyses"
-        verbose_name = "Phân tích tin nhắn"
-        verbose_name_plural = "Phân tích tin nhắn"
+        verbose_name = "Phân tích AI"
+        verbose_name_plural = "Phân tích AI"
 
     def __str__(self):
-        return f"Analysis for message {self.message_id} - {self.status}"
+        return f"Phân tích {self.message_id}"
+
 
 class Report(models.Model):
     REPORT_TYPE_CHOICES = [
@@ -157,16 +161,16 @@ class Report(models.Model):
         ("failed", "Thất bại"),
     ]
 
-    report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, default="daily")
-    title = models.CharField(max_length=255)
-    from_time = models.DateTimeField()
-    to_time = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    file_path = models.CharField(max_length=500, blank=True, null=True)
-    file_name = models.CharField(max_length=255, blank=True, null=True)
-    note = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(blank=True, null=True)
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, default="daily", verbose_name="Loại báo cáo")
+    title = models.CharField(max_length=255, verbose_name="Tiêu đề")
+    from_time = models.DateTimeField(verbose_name="Từ thời gian")
+    to_time = models.DateTimeField(verbose_name="Đến thời gian")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="Trạng thái")
+    file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="Đường dẫn file")
+    file_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Tên file")
+    note = models.TextField(blank=True, null=True, verbose_name="Ghi chú")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
+    completed_at = models.DateTimeField(blank=True, null=True, verbose_name="Hoàn thành lúc")
 
     class Meta:
         db_table = "reports"
@@ -175,13 +179,14 @@ class Report(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.title} - {self.status}"
+        return f"{self.title}"
+
 
 class IntakeSubmission(models.Model):
     INTENT_CHOICES = [
         ("complaint", "Khiếu nại"),
         ("crime_report", "Tin báo tội phạm"),
-        ("admin_procedure", "Hỏi thủ tục hành chính"),
+        ("admin_procedure", "Thủ tục hành chính"),
     ]
 
     STATUS_CHOICES = [
@@ -196,6 +201,7 @@ class IntakeSubmission(models.Model):
         "social_messages.Conversation",
         on_delete=models.CASCADE,
         related_name="intake_submissions",
+        verbose_name="Cuộc hội thoại"
     )
     message = models.ForeignKey(
         "social_messages.Message",
@@ -203,33 +209,34 @@ class IntakeSubmission(models.Model):
         null=True,
         blank=True,
         related_name="intake_submissions",
+        verbose_name="Tin nhắn nguồn"
     )
-    intent = models.CharField(max_length=50, choices=INTENT_CHOICES)
+    intent = models.CharField(max_length=50, choices=INTENT_CHOICES, verbose_name="Loại phản ánh")
 
-    citizen_name = models.CharField(max_length=255, blank=True, default="")
-    phone_number = models.CharField(max_length=50, blank=True, default="")
-    address = models.TextField(blank=True, default="")
-    content = models.TextField()
-    event_time = models.CharField(max_length=255, blank=True, default="")
-    event_location = models.TextField(blank=True, default="")
-    related_person = models.TextField(blank=True, default="")
-    urgency_level = models.CharField(max_length=50, blank=True, default="")
+    citizen_name = models.CharField(max_length=255, blank=True, default="", verbose_name="Tên người dân")
+    phone_number = models.CharField(max_length=50, blank=True, default="", verbose_name="Số điện thoại")
+    address = models.TextField(blank=True, default="", verbose_name="Địa chỉ")
+    content = models.TextField(verbose_name="Nội dung phản ánh")
+    event_time = models.CharField(max_length=255, blank=True, default="", verbose_name="Thời gian xảy ra")
+    event_location = models.TextField(blank=True, default="", verbose_name="Địa điểm")
+    related_person = models.TextField(blank=True, default="", verbose_name="Người liên quan")
+    urgency_level = models.CharField(max_length=50, blank=True, default="", verbose_name="Mức độ khẩn cấp")
 
-    topic = models.CharField(max_length=255, blank=True, default="")
-    sentiment = models.CharField(max_length=50, blank=True, default="")
-    priority = models.CharField(max_length=50, blank=True, default="")
-    summary = models.TextField(blank=True, default="")
-    response_text = models.TextField(blank=True, default="")
+    topic = models.CharField(max_length=255, blank=True, default="", verbose_name="Chủ đề")
+    sentiment = models.CharField(max_length=50, blank=True, default="", verbose_name="Cảm xúc")
+    priority = models.CharField(max_length=50, blank=True, default="", verbose_name="Độ ưu tiên")
+    summary = models.TextField(blank=True, default="", verbose_name="Tóm tắt")
+    response_text = models.TextField(blank=True, default="", verbose_name="Phản hồi")
 
-    raw_extracted_data = models.JSONField(default=dict, blank=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="received")
-    created_at = models.DateTimeField(auto_now_add=True)
+    raw_extracted_data = models.JSONField(default=dict, blank=True, verbose_name="Dữ liệu AI trích xuất")
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="received", verbose_name="Trạng thái")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
 
     class Meta:
         db_table = "intake_submissions"
-        verbose_name = "Hồ sơ tiếp nhận"
-        verbose_name_plural = "Hồ sơ tiếp nhận"
+        verbose_name = "Hồ sơ phản ánh"
+        verbose_name_plural = "Hồ sơ phản ánh"
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.intent} - {self.citizen_name or self.conversation_id}"
+        return f"{self.get_intent_display()} - {self.citizen_name or self.conversation_id}"

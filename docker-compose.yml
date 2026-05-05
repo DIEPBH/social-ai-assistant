@@ -50,6 +50,8 @@ services:
       - ./openclaw_config:/home/node/.openclaw
     environment:
       TZ: Asia/Ho_Chi_Minh
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
 
   db:
     image: postgres:15

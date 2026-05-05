@@ -5,7 +5,7 @@ from django.conf import settings
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
-
+import unicodedata
 from social_messages.models import IntakeSubmission, Report
 
 
@@ -73,12 +73,10 @@ class DailyReportExporter:
         self._style_sheet(summary_sheet)
         self._style_sheet(submission_sheet)
 
-        reports_dir = Path(settings.MEDIA_ROOT) / "reports"
+        reports_dir = self._get_report_folder()
         reports_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_title = re.sub(r"[^\w\s-]", "", self.report.title)
-        safe_title = safe_title.strip().replace(" ", "_")
-
+        safe_title = self._slugify_filename(self.report.title)
         filename = f"{safe_title}_{self.report.id}.xlsx"
         file_path = reports_dir / filename
 
@@ -227,6 +225,19 @@ class DailyReportExporter:
         }
         return mapping.get(intent, intent or "")
 
+    def _slugify_filename(self, text):
+        text = unicodedata.normalize("NFKD", text or "")
+        text = text.encode("ascii", "ignore").decode("ascii")
+        text = re.sub(r"[^\w\s-]", "", text)
+        text = text.strip().replace(" ", "_")
+        return text or "bao_cao"
+
+    def _get_report_folder(self):
+        target_time = self.report.from_time
+        year = target_time.strftime("%Y")
+        month = target_time.strftime("%m")
+        return Path(settings.MEDIA_ROOT) / "reports" / year / month
+
     def _display_status(self, status):
         mapping = {
             "received": "Đã tiếp nhận",
@@ -246,3 +257,5 @@ class DailyReportExporter:
             "urgent": "Khẩn cấp",
         }
         return mapping.get(priority, priority or "")
+    
+    

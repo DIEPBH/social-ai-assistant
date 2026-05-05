@@ -13,6 +13,10 @@ from social_messages.services.zalo_sender import ZaloOASender
 from social_messages.services.keyword_engine import KeywordEngine
 from social_messages.services.zalo_token_refresher import ZaloTokenRefresher
 from social_messages.models import Channel
+from social_messages.services.admin_insight_service import AdminInsightService
+from social_messages.services.admin_reply_service import AdminReplyService
+from datetime import datetime, time, timedelta
+from social_messages.services.admin_ai_interpreter import AdminAIInterpreter
 logger = logging.getLogger(__name__)
 
 
@@ -181,13 +185,34 @@ def process_admin_command(message_id: int):
 
         parser = CommandParser()
         parsed = parser.parse(message.content or "")
+        
+        if not parsed.get("is_command"):
+            ai_parsed = AdminAIInterpreter().interpret(message.content or "")
+
+            if ai_parsed.get("is_command"):
+                parsed = build_report_command_from_ai(ai_parsed)
+            else:
+                parsed = ai_parsed
 
         if not parsed.get("is_command"):
+            reply_text = (
+                "Tôi chưa hiểu lệnh quản trị này.\n"
+                "Anh/chị có thể thử:\n"
+                "- tình hình hôm nay\n"
+                "- báo cáo hôm nay\n"
+                "- hệ thống có lỗi không"
+            )
+
+            outbound_result = AdminReplyService().send(message, reply_text)
+
             return {
                 "status": "ignored",
                 "message_id": message.id,
-                "reason": "not_a_command",
+                "reason": "not_a_supported_admin_command",
+                "outbound_result": outbound_result,
             }
+        
+
         if parsed.get("command_type") == "invalid_report_date":
             return {
                 "status": "error",
@@ -195,6 +220,29 @@ def process_admin_command(message_id: int):
                 "reason": "invalid_report_date",
                 "error": parsed.get("error", "Ngày báo cáo không hợp lệ"),
             }
+        
+        if parsed["command_type"] == "today_insight":
+            reply_text = AdminInsightService().get_today_insight_text()
+            outbound_result = AdminReplyService().send(message, reply_text)
+
+            return {
+                "status": "success",
+                "message_id": message.id,
+                "command_type": "today_insight",
+                "outbound_result": outbound_result,
+            }
+
+        if parsed["command_type"] == "system_status":
+            reply_text = AdminInsightService().get_system_status_text()
+            outbound_result = AdminReplyService().send(message, reply_text)
+
+            return {
+                "status": "success",
+                "message_id": message.id,
+                "command_type": "system_status",
+                "outbound_result": outbound_result,
+            }
+
         if parsed["command_type"] == "generate_daily_report":
             report = Report.objects.create(
                 report_type=parsed["report_type"],
@@ -206,7 +254,11 @@ def process_admin_command(message_id: int):
             )
 
             report_task = generate_daily_report.delay(report.id, message.id)
-
+            AdminReplyService().send(
+                message,
+                f"Đã nhận lệnh tạo báo cáo: {report.title}\n"
+                "Hệ thống đang xử lý. Khi tạo xong file, tôi sẽ gửi link tải về Zalo."
+            )
             return {
                 "status": "success",
                 "message_id": message.id,
@@ -255,7 +307,8 @@ def send_report_result_to_zalo(report_id: int, admin_message_id: int):
         if not report.file_name:
             raise ValueError("Report file_name is empty")
 
-        download_url = f"{settings.PUBLIC_BASE_URL}/media/reports/{report.file_name}"
+        relative_path = Path(report.file_path).relative_to(settings.MEDIA_ROOT)
+        download_url = f"{settings.PUBLIC_BASE_URL}/media/{relative_path.as_posix()}"
 
         text = (
             f"Đã tạo xong báo cáo: {report.title}\n"
@@ -534,3 +587,86 @@ def refresh_all_zalo_tokens_if_needed():
         "total": len(results),
         "results": results,
     }
+
+def build_report_command_from_ai(parsed: dict):
+    now = timezone.localtime()
+
+    if parsed.get("command_type") == "generate_daily_report":
+        date_type = parsed.get("date_type")
+
+        if date_type == "today":
+            target_date = now.date()
+        elif date_type == "yesterday":
+            target_date = now.date() - timedelta(days=1)
+        elif date_type == "specific":
+            try:
+                target_date = datetime.strptime(parsed.get("date"), "%Y-%m-%d").date()
+            except Exception:
+                return {
+                    "is_command": True,
+                    "command_type": "invalid_report_date",
+                    "error": "AI nhận diện ngày báo cáo không hợp lệ",
+                }
+        else:
+            return {
+                "is_command": False,
+                "command_type": None,
+                "reason": "missing_report_date",
+            }
+
+        return {
+            "is_command": True,
+            "command_type": "generate_daily_report",
+            "title": f"Báo cáo ngày {target_date.strftime('%d-%m-%Y')}",
+            "from_time": start_of_day(target_date),
+            "to_time": end_of_day(target_date),
+            "report_type": "daily",
+            "source": "ai",
+        }
+
+    if parsed.get("command_type") == "generate_custom_report":
+        range_value = parsed.get("range")
+
+        if range_value == "this_week":
+            start_date = now.date() - timedelta(days=now.weekday())
+            end_date = start_date + timedelta(days=6)
+
+            return {
+                "is_command": True,
+                "command_type": "generate_daily_report",
+                "title": f"Báo cáo tuần {start_date.strftime('%d-%m-%Y')} đến {end_date.strftime('%d-%m-%Y')}",
+                "from_time": start_of_day(start_date),
+                "to_time": end_of_day(end_date),
+                "report_type": "custom",
+                "source": "ai",
+            }
+
+        if range_value == "this_month":
+            start_date = now.date().replace(day=1)
+
+            if now.month == 12:
+                next_month = now.date().replace(year=now.year + 1, month=1, day=1)
+            else:
+                next_month = now.date().replace(month=now.month + 1, day=1)
+
+            end_date = next_month - timedelta(days=1)
+
+            return {
+                "is_command": True,
+                "command_type": "generate_daily_report",
+                "title": f"Báo cáo tháng {now.strftime('%m-%Y')}",
+                "from_time": start_of_day(start_date),
+                "to_time": end_of_day(end_date),
+                "report_type": "custom",
+                "source": "ai",
+            }
+
+    return parsed
+
+
+def start_of_day(target_date):
+    return timezone.make_aware(datetime.combine(target_date, time.min))
+
+
+def end_of_day(target_date):
+    return timezone.make_aware(datetime.combine(target_date, time.max))

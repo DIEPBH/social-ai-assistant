@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <h1 class="mb-4">Dashboard tổng quan</h1>
+
+  <div class="row">
+    <div class="col-md-3">
+      <div class="card text-white bg-primary mb-3">
+        <div class="card-body">
+          <h5>Tin nhắn hôm nay</h5>
+          <h2>{{ messages_today }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-white bg-info mb-3">
+        <div class="card-body">
+          <h5>Tin Zalo hôm nay</h5>
+          <h2>{{ zalo_messages_today }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-white bg-secondary mb-3">
+        <div class="card-body">
+          <h5>Tin Facebook hôm nay</h5>
+          <h2>{{ facebook_messages_today }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-white bg-success mb-3">
+        <div class="card-body">
+          <h5>Hội thoại đang mở</h5>
+          <h2>{{ open_conversations }}</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-md-3">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5>Hồ sơ hôm nay</h5>
+          <h2>{{ submissions_today }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5>Hồ sơ chưa phản hồi</h5>
+          <h2>{{ pending_submissions }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5>Ưu tiên cao</h5>
+          <h2>{{ high_priority_submissions }}</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5>Báo cáo hoàn tất hôm nay</h5>
+          <h2>{{ reports_completed_today }}</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          Tin nhắn 7 ngày gần nhất
+        </div>
+        <div class="card-body">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Số tin nhắn</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in message_chart %}
+              <tr>
+                <td>{{ item.day }}</td>
+                <td>{{ item.total }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="2">Chưa có dữ liệu</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          Hồ sơ theo trạng thái
+        </div>
+        <div class="card-body">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Trạng thái</th>
+                <th>Số lượng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in status_chart %}
+              <tr>
+                <td>{{ item.status }}</td>
+                <td>{{ item.total }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="2">Chưa có dữ liệu</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

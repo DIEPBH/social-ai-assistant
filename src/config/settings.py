@@ -161,8 +161,12 @@ JAZZMIN_SETTINGS = {
     "navigation_expanded": True,
 
     "topmenu_links": [
-        {"name": "Trang chủ", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "Xem website", "url": "/", "new_window": True},
+    {"name": "Trang chủ", "url": "admin:index", "permissions": ["auth.view_user"]},
+    {"name": "Dashboard", "url": "/social-messages/admin-dashboard/", "permissions": ["auth.view_user"]},
+    {"name": "Tin nhắn", "url": "/admin/social_messages/message/"},
+    {"name": "Phản ánh", "url": "/admin/social_messages/intakesubmission/"},
+    {"name": "Báo cáo", "url": "/admin/social_messages/report/"},
+    {"name": "Xem website", "url": "/", "new_window": True},
     ],
 
     "order_with_respect_to": [
@@ -177,37 +181,20 @@ JAZZMIN_SETTINGS = {
     ],
 
     "icons": {
-        "social_messages.Channel": "fas fa-broadcast-tower",
+        "social_messages.Channel": "fas fa-satellite-dish",
         "social_messages.Conversation": "fas fa-comments",
-        "social_messages.Message": "fas fa-envelope",
+        "social_messages.Message": "fas fa-comment-dots",
         "social_messages.IntakeSubmission": "fas fa-folder-open",
-        "social_messages.MessageAnalysis": "fas fa-brain",
+        "social_messages.MessageAnalysis": "fas fa-robot",
         "social_messages.Report": "fas fa-file-excel",
-        "auth.User": "fas fa-user",
-        "auth.Group": "fas fa-users",
+        "auth.User": "fas fa-user-shield",
+        "auth.Group": "fas fa-users-cog",
     },
 
     "default_icon_parents": "fas fa-folder",
     "default_icon_children": "fas fa-circle",
 
     "changeform_format": "horizontal_tabs",
-}
-
-JAZZMIN_UI_TWEAKS = {
-    "theme": "flatly",
-    "dark_mode_theme": "darkly",
-    "navbar": "navbar-primary navbar-dark",
-    "sidebar": "sidebar-dark-primary",
-    "brand_colour": "navbar-primary",
-    "accent": "accent-primary",
-    "button_classes": {
-        "primary": "btn btn-primary",
-        "secondary": "btn btn-outline-secondary",
-        "info": "btn btn-info",
-        "warning": "btn btn-warning",
-        "danger": "btn btn-danger",
-        "success": "btn btn-success",
-    },
 }
 
 
