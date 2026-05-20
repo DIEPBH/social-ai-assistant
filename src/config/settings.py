@@ -181,14 +181,23 @@ JAZZMIN_SETTINGS = {
     ],
 
     "icons": {
-        "social_messages.Channel": "fas fa-satellite-dish",
-        "social_messages.Conversation": "fas fa-comments",
-        "social_messages.Message": "fas fa-comment-dots",
-        "social_messages.IntakeSubmission": "fas fa-folder-open",
-        "social_messages.MessageAnalysis": "fas fa-robot",
-        "social_messages.Report": "fas fa-file-excel",
-        "auth.User": "fas fa-user-shield",
-        "auth.Group": "fas fa-users-cog",
+    "social_messages.Channel": "fas fa-satellite-dish",
+    "social_messages.Conversation": "fas fa-comments",
+    "social_messages.Message": "fas fa-comment-dots",
+    "social_messages.IntakeSubmission": "fas fa-folder-open",
+    "social_messages.MessageAnalysis": "fas fa-robot",
+    "social_messages.Report": "fas fa-file-excel",
+
+    "social_messages.IntakeCategory": "fas fa-layer-group",
+    "social_messages.IntakeTemplate": "fas fa-file-alt",
+    "social_messages.IntakeTemplateField": "fas fa-list-ul",
+    "social_messages.IntakeValidationRule": "fas fa-clipboard-check",
+    "social_messages.KeywordRule": "fas fa-key",
+    "social_messages.AdminCommand": "fas fa-terminal",
+    "social_messages.AdminCommandPattern": "fas fa-keyboard",
+
+    "auth.User": "fas fa-user-shield",
+    "auth.Group": "fas fa-users-cog",
     },
 
     "default_icon_parents": "fas fa-folder",

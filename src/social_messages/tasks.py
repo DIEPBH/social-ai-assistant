@@ -162,7 +162,8 @@ def process_admin_command(message_id: int):
             "conversation",
             "conversation__channel",
         ).get(id=message_id)
-        logger.info("test process_admin_command message_id=%s platform=%s sender_id=%s content=%s",
+        logger.info(
+            "test process_admin_command message_id=%s platform=%s sender_id=%s content=%s",
             message.id,
             message.conversation.channel.platform,
             message.sender_id,
@@ -185,7 +186,9 @@ def process_admin_command(message_id: int):
 
         parser = CommandParser()
         parsed = parser.parse(message.content or "")
-        
+
+        # Fallback AI chỉ dùng cho các nhóm lệnh hệ thống cũ. Lệnh do admin khai báo
+        # trong DB sẽ được CommandParser xử lý trước qua AdminCommand/AdminCommandPattern.
         if not parsed.get("is_command"):
             ai_parsed = AdminAIInterpreter().interpret(message.content or "")
 
@@ -195,14 +198,7 @@ def process_admin_command(message_id: int):
                 parsed = ai_parsed
 
         if not parsed.get("is_command"):
-            reply_text = (
-                "Tôi chưa hiểu lệnh quản trị này.\n"
-                "Anh/chị có thể thử:\n"
-                "- tình hình hôm nay\n"
-                "- báo cáo hôm nay\n"
-                "- hệ thống có lỗi không"
-            )
-
+            reply_text = parser.get_help_text()
             outbound_result = AdminReplyService().send(message, reply_text)
 
             return {
@@ -211,16 +207,29 @@ def process_admin_command(message_id: int):
                 "reason": "not_a_supported_admin_command",
                 "outbound_result": outbound_result,
             }
-        
 
         if parsed.get("command_type") == "invalid_report_date":
+            reply_text = parsed.get("error", "Ngày báo cáo không hợp lệ")
+            outbound_result = AdminReplyService().send(message, reply_text)
             return {
                 "status": "error",
                 "message_id": message.id,
                 "reason": "invalid_report_date",
-                "error": parsed.get("error", "Ngày báo cáo không hợp lệ"),
+                "error": reply_text,
+                "outbound_result": outbound_result,
             }
-        
+
+        if parsed["command_type"] == "static_reply":
+            reply_text = parsed.get("reply_text") or "Đã nhận lệnh quản trị."
+            outbound_result = AdminReplyService().send(message, reply_text)
+            return {
+                "status": "success",
+                "message_id": message.id,
+                "command_type": "static_reply",
+                "admin_command_id": parsed.get("admin_command_id"),
+                "outbound_result": outbound_result,
+            }
+
         if parsed["command_type"] == "today_insight":
             reply_text = AdminInsightService().get_today_insight_text()
             outbound_result = AdminReplyService().send(message, reply_text)
@@ -229,6 +238,7 @@ def process_admin_command(message_id: int):
                 "status": "success",
                 "message_id": message.id,
                 "command_type": "today_insight",
+                "admin_command_id": parsed.get("admin_command_id"),
                 "outbound_result": outbound_result,
             }
 
@@ -240,6 +250,7 @@ def process_admin_command(message_id: int):
                 "status": "success",
                 "message_id": message.id,
                 "command_type": "system_status",
+                "admin_command_id": parsed.get("admin_command_id"),
                 "outbound_result": outbound_result,
             }
 
@@ -250,7 +261,10 @@ def process_admin_command(message_id: int):
                 from_time=parsed["from_time"],
                 to_time=parsed["to_time"],
                 status="pending",
-                note=f"Tạo từ lệnh quản trị. Message ID: {message.id}",
+                note=(
+                    f"Tạo từ lệnh quản trị. Message ID: {message.id}. "
+                    f"AdminCommand ID: {parsed.get('admin_command_id', '')}"
+                ),
             )
 
             report_task = generate_daily_report.delay(report.id, message.id)
@@ -263,6 +277,7 @@ def process_admin_command(message_id: int):
                 "status": "success",
                 "message_id": message.id,
                 "command_type": parsed["command_type"],
+                "admin_command_id": parsed.get("admin_command_id"),
                 "report_id": report.id,
                 "report_task_id": report_task.id,
             }
@@ -354,6 +369,7 @@ def process_intake_submission(submission_id: int):
         submission = IntakeSubmission.objects.select_related(
             "conversation",
             "conversation__channel",
+            "category",
         ).get(id=submission_id)
     except IntakeSubmission.DoesNotExist:
         return {
@@ -363,16 +379,21 @@ def process_intake_submission(submission_id: int):
         }
 
     try:
+        category = submission.category
+
         keyword_engine = KeywordEngine()
         keyword_result = keyword_engine.analyze_submission(submission)
 
-        ai_result = None
         analysis_result = keyword_result
-
         if not analysis_result:
             ai_service = AIAnalysisService()
             ai_input = {
-                "intent": submission.intent,
+                "category": {
+                    "id": category.id if category else None,
+                    "code": category.code if category else submission.intent,
+                    "name": category.name if category else submission.intent,
+                    "description": category.description if category else "",
+                },
                 "citizen_name": submission.citizen_name,
                 "phone_number": submission.phone_number,
                 "address": submission.address,
@@ -381,65 +402,24 @@ def process_intake_submission(submission_id: int):
                 "event_location": submission.event_location,
                 "related_person": submission.related_person,
                 "urgency_level": submission.urgency_level,
+                "raw_extracted_data": submission.raw_extracted_data,
             }
-            ai_result = ai_service.analyze_message(ai_input)
-            analysis_result = ai_result
+            analysis_result = ai_service.analyze_message(ai_input)
 
-        if submission.intent == "complaint":
-            result_payload = build_complaint_result(submission)
-            reply_text = (
-                "Hệ thống đã tiếp nhận nội dung khiếu nại của anh/chị. "
-                "Thông tin đã được chuyển đến bộ phận tiếp nhận để rà soát."
-            )
-
-        elif submission.intent == "crime_report":
-            result_payload = build_crime_report_result(submission)
-            if result_payload.get("urgency") == "urgent" or result_payload.get("immediate_risk"):
-                reply_text = (
-                    "Hệ thống đã tiếp nhận tin báo. "
-                    "Nếu tình huống đang khẩn cấp hoặc đe dọa trực tiếp đến an toàn, "
-                    "vui lòng liên hệ ngay cơ quan công an hoặc số khẩn cấp tại địa phương."
-                )
-            else:
-                reply_text = (
-                    "Hệ thống đã tiếp nhận tin báo của anh/chị "
-                    "và sẽ chuyển xử lý theo quy trình."
-                )
-
-        elif submission.intent == "admin_procedure":
-            result_payload = build_admin_procedure_result(submission)
-            reply_text = result_payload.get(
-                "draft_reply",
-                "Hệ thống đã tiếp nhận câu hỏi về thủ tục hành chính của anh/chị."
-            )
-
-        else:
-            submission.status = "rejected"
-            submission.raw_extracted_data = {
-                **submission.raw_extracted_data,
-                "processing_error": {
-                    "reason": "unknown_intent",
-                    "processed_at": timezone.now().isoformat(),
-                },
-            }
-            submission.save(update_fields=["status", "raw_extracted_data"])
-            return {
-                "status": "error",
-                "reason": "unknown_intent",
-                "submission_id": submission.id,
-            }
+        result_payload = build_dynamic_intake_result(submission, analysis_result)
+        reply_text = build_dynamic_reply_text(submission, analysis_result, result_payload)
 
         from social_messages.services.outbound_message_service import OutboundMessageService
         outbound_service = OutboundMessageService()
         outbound_result = outbound_service.send_text(submission.conversation, reply_text)
 
-        submission.topic = analysis_result.get("topic", "")
-        submission.sentiment = analysis_result.get("sentiment", "")
-        submission.priority = analysis_result.get("priority", "")
-        submission.summary = analysis_result.get("summary", "")
+        submission.topic = analysis_result.get("topic", "") or (category.default_topic if category else "")
+        submission.sentiment = analysis_result.get("sentiment", "") or (category.default_sentiment if category else "")
+        submission.priority = analysis_result.get("priority", "") or (category.default_priority if category else "normal")
+        submission.summary = analysis_result.get("summary", "") or submission.content
         submission.response_text = reply_text
         submission.raw_extracted_data = {
-            **submission.raw_extracted_data,
+            **(submission.raw_extracted_data or {}),
             "analysis_result": analysis_result,
             "analysis_source": "keyword" if keyword_result else "ai",
             "processing_result": result_payload,
@@ -459,7 +439,7 @@ def process_intake_submission(submission_id: int):
         return {
             "status": "success",
             "submission_id": submission.id,
-            "intent": submission.intent,
+            "category": category.code if category else submission.intent,
             "topic": submission.topic,
             "priority": submission.priority,
             "analysis_source": "keyword" if keyword_result else "ai",
@@ -470,7 +450,7 @@ def process_intake_submission(submission_id: int):
     except Exception as exc:
         submission.status = "rejected"
         submission.raw_extracted_data = {
-            **submission.raw_extracted_data,
+            **(submission.raw_extracted_data or {}),
             "processing_error": {
                 "reason": str(exc),
                 "processed_at": timezone.now().isoformat(),
@@ -485,6 +465,42 @@ def process_intake_submission(submission_id: int):
             "submission_id": submission.id,
             "error": str(exc),
         }
+
+
+def build_dynamic_intake_result(submission: IntakeSubmission, analysis_result: dict) -> dict:
+    category = submission.category
+    priority = analysis_result.get("priority") or (category.default_priority if category else "normal")
+
+    return {
+        "category_id": category.id if category else None,
+        "category_code": category.code if category else submission.intent,
+        "category_name": category.name if category else submission.intent,
+        "summary": analysis_result.get("summary") or submission.content,
+        "priority": priority,
+        "suggested_department": category.default_department if category else "",
+        "requires_human_review": category.requires_human_review if category else True,
+        "processed_at": timezone.now().isoformat(),
+    }
+
+
+def build_dynamic_reply_text(submission: IntakeSubmission, analysis_result: dict, result_payload: dict) -> str:
+    category = submission.category
+
+    if analysis_result.get("response_text"):
+        return analysis_result["response_text"]
+
+    priority = result_payload.get("priority") or "normal"
+    if category and priority in {"high", "urgent", "critical"} and category.urgent_reply_text:
+        return category.urgent_reply_text
+
+    if category and category.success_reply_text:
+        return category.success_reply_text
+
+    category_name = category.name if category else "nội dung"
+    return (
+        f"Hệ thống đã tiếp nhận {category_name.lower()} của anh/chị. "
+        "Thông tin đã được chuyển đến bộ phận phụ trách để rà soát và xử lý theo quy trình."
+    )
 
 
 def build_complaint_result(submission: IntakeSubmission) -> dict:

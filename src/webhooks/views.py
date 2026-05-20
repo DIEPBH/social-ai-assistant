@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from social_messages.models import Channel, Conversation, IntakeSubmission, Message
+from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message
 from social_messages.services.intake_router import IntakeRouter
 from social_messages.services.outbound_message_service import OutboundMessageService
 from social_messages.services.webhook_normalizer import WebhookNormalizer
@@ -210,7 +210,11 @@ def handle_citizen_incoming(conversation, payload, user_text):
 
     if route_result["action"] == "reply_only":
         reply_text = route_result["reply_text"]
-        outbound_result = send_reply_to_platform(conversation, reply_text)
+        outbound_result = send_reply_to_platform(
+            conversation,
+            reply_text,
+            buttons=route_result.get("buttons"),
+        )
 
         return {
             "status": "reply_only",
@@ -236,38 +240,53 @@ def handle_citizen_incoming(conversation, payload, user_text):
         )
 
         cleaned = route_result["cleaned_data"]
+        mapped = cleaned.get("mapped_data", {})
+        extra = cleaned.get("extra_data", {})
+        fields = cleaned.get("fields", {})
+
+        category = IntakeCategory.objects.get(id=route_result["category_id"])
 
         submission = IntakeSubmission.objects.create(
             conversation=conversation,
             message=message,
-            intent=route_result["intent"],
-            citizen_name=cleaned.get("họ tên", ""),
-            phone_number=cleaned.get("số điện thoại", ""),
-            address=cleaned.get("địa chỉ", "") or cleaned.get("địa chỉ liên hệ", ""),
-            content=(
-                cleaned.get("nội dung khiếu nại", "")
-                or cleaned.get("nội dung vụ việc", "")
-                or cleaned.get("nội dung", "")
-            ),
-            event_time=cleaned.get("thời gian", ""),
-            event_location=cleaned.get("địa điểm", ""),
-            related_person=cleaned.get("đối tượng liên quan", ""),
-            urgency_level=cleaned.get("mức độ khẩn cấp", ""),
+            category=category,
+            intent=category.code,
+            citizen_name=mapped.get("citizen_name", ""),
+            phone_number=mapped.get("phone_number", ""),
+            address=mapped.get("address", ""),
+            content=mapped.get("content", "") or user_text,
+            event_time=mapped.get("event_time", ""),
+            event_location=mapped.get("event_location", ""),
+            related_person=mapped.get("related_person", ""),
+            urgency_level=mapped.get("urgency_level", ""),
             topic="",
             sentiment="",
             priority="",
             summary="",
             response_text="",
-            raw_extracted_data=cleaned,
+            raw_extracted_data={
+                "category": {
+                    "id": category.id,
+                    "code": category.code,
+                    "name": category.name,
+                },
+                "fields": fields,
+                "mapped_data": mapped,
+                "extra_data": extra,
+                "field_labels": cleaned.get("field_labels", {}),
+                "raw_text": user_text,
+            },
             status="validated",
         )
 
         conversation.current_state = ""
+        conversation.current_category = None
         conversation.current_intent = ""
         conversation.form_retry_count = 0
         conversation.last_bot_prompt = ""
         conversation.save(update_fields=[
             "current_state",
+            "current_category",
             "current_intent",
             "form_retry_count",
             "last_bot_prompt",
@@ -283,6 +302,7 @@ def handle_citizen_incoming(conversation, payload, user_text):
             "submission_id": submission.id,
             "task_id": task.id,
             "conversation_id": conversation.id,
+            "category": category.code,
         }
 
     return {
@@ -290,7 +310,6 @@ def handle_citizen_incoming(conversation, payload, user_text):
         "reason": "unknown_route_action",
         "conversation_id": conversation.id,
     }
-
 
 def get_or_create_conversation(data):
     platform = data["platform"]
@@ -344,10 +363,13 @@ def parse_sent_at(sent_at_str):
     return timezone.now()
 
 
-def send_reply_to_platform(conversation, reply_text):
+def send_reply_to_platform(conversation, reply_text, buttons=None):
     try:
         service = OutboundMessageService()
-        result = service.send_text(conversation, reply_text)
+        if buttons:
+            result = service.send_text_with_buttons(conversation, reply_text, buttons)
+        else:
+            result = service.send_text(conversation, reply_text)
 
         logger.info(
             "OUTBOUND REPLY platform=%s conversation_id=%s result=%s",
@@ -380,5 +402,7 @@ def debug_conversation(request, customer_id):
         "id": c.id,
         "state": c.current_state,
         "intent": c.current_intent,
+        "category_id": c.current_category_id,
+        "category_name": c.current_category.name if c.current_category else "",
         "retry": c.form_retry_count,
     })

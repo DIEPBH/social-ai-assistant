@@ -24,6 +24,16 @@ class OpenClawAnalyzer:
     ALLOWED_SENTIMENTS = {"tích cực", "trung lập", "tiêu cực"}
     ALLOWED_PRIORITIES = {"low", "normal", "high"}
 
+    def _get_dynamic_topics_text(self) -> str:
+        try:
+            from social_messages.models import IntakeCategory
+            topics = []
+            for category in IntakeCategory.objects.filter(is_active=True).order_by("menu_order", "id"):
+                topics.append(category.default_topic or category.name)
+            return ", ".join(dict.fromkeys([topic for topic in topics if topic])) or "khác"
+        except Exception:
+            return "khiếu nại, tin báo tội phạm, thủ tục hành chính, hỗ trợ kỹ thuật, khác"
+
     def __init__(self) -> None:
         self.base_url = os.getenv("OPENCLOW_BASE_URL", "http://openclaw:18789").rstrip("/")
         self.timeout = int(os.getenv("OPENCLOW_TIMEOUT", "30"))
@@ -55,6 +65,8 @@ class OpenClawAnalyzer:
             "Authorization": f"Bearer {self.gateway_token}",
         }
 
+        dynamic_topics = self._get_dynamic_topics_text()
+
         payload = {
             "model": "openclaw/default",
             "temperature": 0.1,
@@ -65,7 +77,7 @@ class OpenClawAnalyzer:
                         "Bạn là trợ lý AI cho hệ thống tiếp nhận tin nhắn của cơ quan nhà nước. "
                         "Hãy phân tích nội dung người dân gửi tới và trả về DUY NHẤT một JSON hợp lệ "
                         "với đúng 4 khóa: topic, sentiment, priority, summary. "
-                        "topic nên ưu tiên một trong các nhóm: khiếu nại, tin báo tội phạm, thủ tục hành chính, hỗ trợ kỹ thuật, khác. "
+                        f"topic nên ưu tiên một trong các nhóm đang được cấu hình trong hệ thống: {dynamic_topics}. "
                         "sentiment chỉ được là: tích cực, trung lập, tiêu cực. "
                         "priority chỉ được là: low, normal, high. "
                         "summary phải ngắn gọn, rõ nghĩa, bằng tiếng Việt."
@@ -140,6 +152,17 @@ class OpenClawAnalyzer:
 
     def _normalize_topic(self, topic: Any) -> str:
         raw = str(topic or "").strip().lower()
+
+        try:
+            from social_messages.models import IntakeCategory
+            for category in IntakeCategory.objects.filter(is_active=True):
+                candidates = [category.name, category.code, category.default_topic, *(category.aliases or [])]
+                for candidate in candidates:
+                    candidate_raw = str(candidate or "").strip().lower()
+                    if candidate_raw and candidate_raw in raw:
+                        return category.default_topic or category.name
+        except Exception:
+            pass
 
         if any(keyword in raw for keyword in ["khiếu nại", "khieu nai", "phàn nàn", "phan nan"]):
             return "khiếu nại"
