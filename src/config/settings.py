@@ -134,6 +134,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+DAILY_REPORT_BANNER_URL = os.getenv("DAILY_REPORT_BANNER_URL", "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop")
 
 LOGGING = {
     "version": 1,
@@ -174,7 +175,6 @@ JAZZMIN_SETTINGS = {
         "social_messages.Conversation",
         "social_messages.Message",
         "social_messages.IntakeSubmission",
-        "social_messages.MessageAnalysis",
         "social_messages.Report",
         "auth.User",
         "auth.Group",
@@ -185,9 +185,7 @@ JAZZMIN_SETTINGS = {
     "social_messages.Conversation": "fas fa-comments",
     "social_messages.Message": "fas fa-comment-dots",
     "social_messages.IntakeSubmission": "fas fa-folder-open",
-    "social_messages.MessageAnalysis": "fas fa-robot",
     "social_messages.Report": "fas fa-file-excel",
-
     "social_messages.IntakeCategory": "fas fa-layer-group",
     "social_messages.IntakeTemplate": "fas fa-file-alt",
     "social_messages.IntakeTemplateField": "fas fa-list-ul",
@@ -206,6 +204,40 @@ JAZZMIN_SETTINGS = {
     "changeform_format": "horizontal_tabs",
 }
 
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-primary",
+    "accent": "accent-primary",
+    "navbar": "navbar-white navbar-light",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-light-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "lumen",
+    "dark_mode_theme": None,
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
+}
+
+
+from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     "refresh-zalo-tokens-every-30-minutes": {
@@ -215,5 +247,9 @@ CELERY_BEAT_SCHEDULE = {
     "cleanup-integration-logs-daily": {
         "task": "social_messages.tasks.cleanup_integration_logs",
         "schedule": 86400.0,
+    },
+    "send-daily-24h-summary": {
+        "task": "social_messages.tasks.send_daily_24h_summary_report",
+        "schedule": crontab(hour=8, minute=0),
     },
 }

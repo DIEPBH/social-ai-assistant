@@ -700,3 +700,94 @@ def cleanup_integration_logs():
         "status": "success",
         "deleted_count": deleted_count,
     }
+
+
+@shared_task
+def send_daily_24h_summary_report():
+    from social_messages.models import IntakeSubmission, Channel
+    from social_messages.services.zalo_sender import ZaloOASender
+    from django.conf import settings
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    end_time = timezone.now()
+    start_time = end_time - timedelta(days=1)
+    
+    qs = IntakeSubmission.objects.filter(created_at__gte=start_time, created_at__lt=end_time)
+    
+    total = qs.count()
+    zalo_count = qs.filter(conversation__channel__platform='zalo').count()
+    fb_count = qs.filter(conversation__channel__platform='facebook').count()
+    
+    high_count = qs.filter(priority__iexact='high').count()
+    med_count = qs.filter(priority__iexact='medium').count()
+    low_count = qs.filter(priority__iexact='low').count()
+    unknown_count = total - (high_count + med_count + low_count)
+    
+    processed_count = qs.filter(status__in=["analyzed", "responded", "rejected"]).count()
+    unprocessed_count = qs.filter(status__in=["received", "validated"]).count()
+    
+    # Get timezone from settings to format correctly
+    from zoneinfo import ZoneInfo
+    local_tz = ZoneInfo(getattr(settings, 'TIME_ZONE', 'UTC'))
+    local_start = start_time.astimezone(local_tz)
+    local_end = end_time.astimezone(local_tz)
+    
+    start_str = local_start.strftime("%H:%M %d/%m/%Y")
+    end_str = local_end.strftime("%H:%M %d/%m/%Y")
+    
+    import os
+    from urllib.parse import quote
+    
+    public_url = getattr(settings, 'PUBLIC_BASE_URL', 'https://webhook.socialai.id.vn').rstrip('/')
+    banner_url = getattr(settings, 'DAILY_REPORT_BANNER_URL', "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop")
+    
+    # Try to find a local banner image in media/Baner Admin
+    banner_dir = os.path.join(settings.MEDIA_ROOT, 'Baner Admin')
+    if os.path.exists(banner_dir):
+        files = [f for f in os.listdir(banner_dir) if os.path.isfile(os.path.join(banner_dir, f)) and not f.startswith('.')]
+        if files:
+            # Use the first valid file found
+            local_file_name = files[0]
+            banner_url = f"{public_url}{settings.MEDIA_URL}Baner%20Admin/{quote(local_file_name)}"
+    
+    text = f"""📊 BÁO CÁO TỔNG QUAN 24H QUA 📊
+(Từ {start_str} đến {end_str})
+
+📥 TỔNG SỐ HỒ SƠ: {total}
+- Qua Zalo: {zalo_count}
+- Qua Facebook: {fb_count}
+
+🚨 MỨC ĐỘ ƯU TIÊN:
+- Cao: {high_count}
+- Trung bình: {med_count}
+- Thấp: {low_count}
+- Khác: {unknown_count}
+
+⚙️ TIẾN ĐỘ XỬ LÝ:
+- Đã xử lý (Gồm đã phân tích/phản hồi/từ chối): {processed_count}
+- Chưa xử lý (Mới/Hợp lệ): {unprocessed_count}"""
+
+    zalo_channel = Channel.objects.filter(platform='zalo', is_active=True).first()
+    if not zalo_channel or not zalo_channel.access_token:
+        logger.error("Cannot send daily report: No active Zalo channel with access token")
+        return {"status": "error", "reason": "no_zalo_channel"}
+
+    sender = ZaloOASender()
+    admin_ids = getattr(settings, "ZALO_ADMIN_SENDER_IDS", [])
+    sent_count = 0
+    for admin_id in admin_ids:
+        if not str(admin_id).strip():
+            continue
+        try:
+            sender.send_media_template_message(
+                access_token=zalo_channel.access_token,
+                user_id=str(admin_id).strip(),
+                text=text,
+                image_url=banner_url
+            )
+            sent_count += 1
+        except Exception as e:
+            logger.exception(f"Failed to send daily summary to admin {admin_id}: {e}")
+            
+    return {"status": "success", "sent_count": sent_count, "total_admins": len(admin_ids)}

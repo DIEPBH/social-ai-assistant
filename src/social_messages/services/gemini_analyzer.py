@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class GeminiAnalyzer:
     def __init__(self) -> None:
         self.api_key = os.getenv("GEMINI_API_KEY", "")
-        self.timeout = 30
+        self.timeout = 60
         self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.api_key}"
 
     def analyze_message(self, content: str) -> Dict[str, Any]:
@@ -48,15 +48,39 @@ class GeminiAnalyzer:
         response = None
         data = None
         try:
-            logger.info("Calling Gemini API directly")
-            response = requests.post(self.url, json=payload, timeout=self.timeout)
-            if response.status_code != 200:
-                logger.error("Gemini API Error Response: %s", response.text)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as e:
-            error_msg = str(e)
-            logger.exception("Error calling Gemini API: %s", e)
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    logger.info("Calling Gemini API directly, attempt %d", attempt + 1)
+                    response = requests.post(self.url, json=payload, timeout=self.timeout)
+                    if response.status_code != 200:
+                        logger.error("Gemini API Error Response: %s", response.text)
+                    response.raise_for_status()
+                    data = response.json()
+                    error_msg = ""
+                    break
+                except requests.exceptions.RequestException as e:
+                    should_retry = False
+                    if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+                        should_retry = True
+                    elif isinstance(e, requests.exceptions.HTTPError) and e.response is not None and e.response.status_code >= 500:
+                        should_retry = True
+                        
+                    if should_retry:
+                        logger.warning("Gemini API transient error (attempt %d): %s", attempt + 1, str(e))
+                        if attempt == max_retries - 1:
+                            error_msg = str(e)
+                            logger.exception("Error calling Gemini API (Transient): %s", e)
+                        else:
+                            time.sleep(2 ** attempt)
+                    else:
+                        error_msg = str(e)
+                        logger.exception("Error calling Gemini API (Fatal): %s", e)
+                        break
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.exception("Error calling Gemini API: %s", e)
+                    break
         finally:
             processing_time_ms = (time.time() - start_time) * 1000
             resp_json = {}

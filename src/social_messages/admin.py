@@ -14,7 +14,6 @@ from .models import (
     IntakeValidationRule,
     KeywordRule,
     Message,
-    MessageAnalysis,
     Report,
 )
 
@@ -249,59 +248,6 @@ class MessageAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         content = getattr(obj, "content", "") or ""
         return content[:80] + "..." if len(content) > 80 else content
-
-
-@admin.register(MessageAnalysis)
-class MessageAnalysisAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "message",
-        "status_badge",
-        "topic",
-        "sentiment_badge",
-        "priority_badge",
-        "processed_at",
-        "created_at",
-    )
-    search_fields = ("message__platform_message_id", "topic", "summary", "error_message")
-    list_filter = ("status", "topic", "sentiment", "priority")
-
-    @admin.display(description="Trạng thái")
-    def status_badge(self, obj):
-        color_map = {
-            "pending": "warning",
-            "processing": "info",
-            "processed": "success",
-            "done": "success",
-            "success": "success",
-            "failed": "danger",
-            "error": "danger",
-        }
-        return badge(obj.status, color_map.get(obj.status, "secondary"))
-
-    @admin.display(description="Cảm xúc")
-    def sentiment_badge(self, obj):
-        color_map = {
-            "tích cực": "success",
-            "trung lập": "secondary",
-            "tiêu cực": "danger",
-            "positive": "success",
-            "neutral": "secondary",
-            "negative": "danger",
-        }
-        return badge(obj.sentiment, color_map.get(obj.sentiment, "secondary"))
-
-    @admin.display(description="Ưu tiên")
-    def priority_badge(self, obj):
-        color_map = {
-            "low": "secondary",
-            "normal": "info",
-            "medium": "info",
-            "high": "warning",
-            "urgent": "danger",
-            "critical": "danger",
-        }
-        return badge(obj.priority, color_map.get(obj.priority, "secondary"))
 
 
 @admin.register(Report)

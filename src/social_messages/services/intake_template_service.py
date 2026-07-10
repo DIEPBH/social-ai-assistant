@@ -94,6 +94,28 @@ class IntakeTemplateService:
         return "\n".join(lines)
 
     @classmethod
+    def get_required_fields_template(cls, category_or_code):
+        category = cls._resolve_category(category_or_code)
+        if not category:
+            return ""
+
+        template = (
+            IntakeTemplate.objects.filter(category=category, is_active=True)
+            .prefetch_related("fields")
+            .order_by("id")
+            .first()
+        )
+        if not template:
+            return ""
+
+        lines = []
+        active_fields = [field for field in template.fields.all() if field.is_active and field.is_required]
+        for index, field in enumerate(active_fields, start=1):
+            lines.append(f"{index}. {field.label}:")
+
+        return "\n".join(lines)
+
+    @classmethod
     def get_main_menu_buttons(cls):
         return [
             {

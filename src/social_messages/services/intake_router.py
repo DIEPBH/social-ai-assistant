@@ -84,6 +84,9 @@ class IntakeRouter:
             return {
                 "action": "reply_only",
                 "reply_text": template_text,
+                "buttons": [
+                    {"title": "Sao chép mẫu", "type": "oa.query.hide", "payload": "#copy_template"}
+                ]
             }
 
         if conversation.current_state == "awaiting_form":
@@ -97,6 +100,13 @@ class IntakeRouter:
             if self._is_cancel_command(user_text):
                 return self._reset_to_menu(conversation)
 
+            if user_text.strip() == "#copy_template":
+                required_fields_text = self.template_service.get_required_fields_template(category)
+                return {
+                    "action": "reply_only",
+                    "reply_text": required_fields_text
+                }
+
             from social_messages.models import Message
             messages = Message.objects.filter(
                 conversation=conversation,
@@ -106,7 +116,7 @@ class IntakeRouter:
             accumulated_parts = []
             for m in messages:
                 content = (m.content or "").strip()
-                if content and not self._is_cancel_command(content) and not self._is_finish_command(content):
+                if content and not self._is_cancel_command(content) and not self._is_finish_command(content) and content != "#copy_template":
                     accumulated_parts.append(content)
 
             accumulated_text = "\n".join(accumulated_parts)
@@ -167,6 +177,7 @@ class IntakeRouter:
                         f"{template_text}"
                     ),
                     "buttons": [
+                        {"title": "Sao chép mẫu", "type": "oa.query.hide", "payload": "#copy_template"},
                         {"title": "Hoàn tất khai báo", "type": "oa.query.show", "payload": "Xong"},
                         {"title": "Hủy khai báo", "type": "oa.query.show", "payload": "Huỷ"}
                     ],

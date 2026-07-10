@@ -50,6 +50,77 @@ class ZaloOASender:
             },
             "message": message,
         }
+        
+        return self._send_payload(access_token, payload)
+
+    def send_media_template_message(
+        self,
+        access_token: str,
+        user_id: str,
+        text: str,
+        image_url: str
+    ) -> Dict[str, Any]:
+        if not access_token:
+            raise ValueError("Missing Zalo OA access token")
+
+        if not user_id:
+            raise ValueError("Missing Zalo user_id")
+
+        payload = {
+            "recipient": {
+                "user_id": user_id,
+            },
+            "message": {
+                "text": text,
+                "attachment": {
+                    "type": "template",
+                    "payload": {
+                        "template_type": "media",
+                        "elements": [{
+                            "media_type": "image",
+                            "url": image_url
+                        }]
+                    }
+                }
+            },
+        }
+
+        return self._send_payload(access_token, payload)
+
+    def send_list_template_message(
+        self,
+        access_token: str,
+        user_id: str,
+        elements: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        if not access_token:
+            raise ValueError("Missing Zalo OA access token")
+
+        if not user_id:
+            raise ValueError("Missing Zalo user_id")
+
+        payload = {
+            "recipient": {
+                "user_id": user_id,
+            },
+            "message": {
+                "attachment": {
+                    "type": "template",
+                    "payload": {
+                        "template_type": "list",
+                        "elements": elements
+                    }
+                }
+            },
+        }
+
+        return self._send_payload(access_token, payload)
+
+    def _send_payload(self, access_token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        headers = {
+            "access_token": access_token,
+            "Content-Type": "application/json",
+        }
 
         import time
         from social_messages.models import IntegrationLog

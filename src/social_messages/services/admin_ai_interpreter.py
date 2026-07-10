@@ -17,9 +17,9 @@ class AdminAIInterpreter:
     }
 
     def __init__(self) -> None:
-        self.base_url = os.getenv("OPENCLOW_BASE_URL", "http://openclaw:18789").rstrip("/")
-        self.timeout = int(os.getenv("OPENCLOW_TIMEOUT", "30"))
-        self.gateway_token = os.getenv("OPENCLOW_GATEWAY_TOKEN", "")
+        self.api_key = os.getenv("GEMINI_API_KEY", "")
+        self.timeout = int(os.getenv("GEMINI_TIMEOUT", "30"))
+        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.api_key}"
 
     def interpret(self, content: str) -> Dict[str, Any]:
         text = (content or "").strip()
@@ -28,7 +28,7 @@ class AdminAIInterpreter:
             return self._not_command("empty_content")
 
         try:
-            return self._call_openclaw(text)
+            return self._call_gemini(text)
         except Exception as exc:
             return {
                 "is_command": False,
@@ -38,72 +38,60 @@ class AdminAIInterpreter:
                 "error": str(exc),
             }
 
-    def _call_openclaw(self, text: str) -> Dict[str, Any]:
-        if not self.gateway_token:
-            raise RuntimeError("Missing OPENCLOW_GATEWAY_TOKEN")
+    def _call_gemini(self, text: str) -> Dict[str, Any]:
+        if not self.api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY")
 
         now = timezone.localtime()
-
-        url = f"{self.base_url}/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.gateway_token}",
-        }
+        prompt = (
+            "Bạn là bộ phân loại lệnh quản trị cho hệ thống Zalo OA. "
+            "Chỉ trả về DUY NHẤT một JSON hợp lệ. Không giải thích thêm.\n\n"
+            "Các command_type được phép:\n"
+            "- today_insight: admin muốn xem tình hình/tổng quan hôm nay.\n"
+            "- system_status: admin muốn kiểm tra hệ thống có lỗi không.\n"
+            "- generate_daily_report: admin muốn tạo báo cáo cho một ngày cụ thể.\n"
+            "- generate_custom_report: admin muốn tạo báo cáo cho tuần này hoặc tháng này.\n"
+            "- unknown: không hiểu hoặc không phải lệnh quản trị.\n\n"
+            "JSON bắt buộc có dạng:\n"
+            "{"
+            "\"is_command\": true/false, "
+            "\"command_type\": \"...\", "
+            "\"date_type\": \"today|yesterday|specific|none\", "
+            "\"date\": \"YYYY-MM-DD hoặc null\", "
+            "\"range\": \"this_week|this_month|none\", "
+            "\"confidence\": 0.0"
+            "}\n\n"
+            "Quy tắc:\n"
+            "- Nếu hỏi tình hình, tổng quan, hôm nay có gì nổi bật: today_insight.\n"
+            "- Nếu hỏi hệ thống ổn không, có lỗi không, kiểm tra hệ thống: system_status.\n"
+            "- Nếu yêu cầu báo cáo hôm nay: generate_daily_report, date_type=today.\n"
+            "- Nếu yêu cầu báo cáo hôm qua: generate_daily_report, date_type=yesterday.\n"
+            "- Nếu yêu cầu báo cáo ngày cụ thể: generate_daily_report, date_type=specific, date=YYYY-MM-DD.\n"
+            "- Nếu yêu cầu báo cáo tuần này: generate_custom_report, range=this_week.\n"
+            "- Nếu yêu cầu báo cáo tháng này: generate_custom_report, range=this_month.\n"
+            "- Nếu không chắc chắn thì unknown.\n\n"
+            f"Hôm nay là {now.strftime('%Y-%m-%d')}.\n"
+            f"Lệnh admin cần phân loại:\n{text}"
+        )
 
         payload = {
-            "model": "openclaw/default",
-            "temperature": 0,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Bạn là bộ phân loại lệnh quản trị cho hệ thống Zalo OA. "
-                        "Chỉ trả về DUY NHẤT một JSON hợp lệ. Không giải thích thêm.\n\n"
-                        "Các command_type được phép:\n"
-                        "- today_insight: admin muốn xem tình hình/tổng quan hôm nay.\n"
-                        "- system_status: admin muốn kiểm tra hệ thống có lỗi không.\n"
-                        "- generate_daily_report: admin muốn tạo báo cáo cho một ngày cụ thể.\n"
-                        "- generate_custom_report: admin muốn tạo báo cáo cho tuần này hoặc tháng này.\n"
-                        "- unknown: không hiểu hoặc không phải lệnh quản trị.\n\n"
-                        "JSON bắt buộc có dạng:\n"
-                        "{"
-                        "\"is_command\": true/false, "
-                        "\"command_type\": \"...\", "
-                        "\"date_type\": \"today|yesterday|specific|none\", "
-                        "\"date\": \"YYYY-MM-DD hoặc null\", "
-                        "\"range\": \"this_week|this_month|none\", "
-                        "\"confidence\": 0.0"
-                        "}\n\n"
-                        "Quy tắc:\n"
-                        "- Nếu hỏi tình hình, tổng quan, hôm nay có gì nổi bật: today_insight.\n"
-                        "- Nếu hỏi hệ thống ổn không, có lỗi không, kiểm tra hệ thống: system_status.\n"
-                        "- Nếu yêu cầu báo cáo hôm nay: generate_daily_report, date_type=today.\n"
-                        "- Nếu yêu cầu báo cáo hôm qua: generate_daily_report, date_type=yesterday.\n"
-                        "- Nếu yêu cầu báo cáo ngày cụ thể: generate_daily_report, date_type=specific, date=YYYY-MM-DD.\n"
-                        "- Nếu yêu cầu báo cáo tuần này: generate_custom_report, range=this_week.\n"
-                        "- Nếu yêu cầu báo cáo tháng này: generate_custom_report, range=this_month.\n"
-                        "- Nếu không chắc chắn thì unknown.\n"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Hôm nay là {now.strftime('%Y-%m-%d')}.\n"
-                        f"Lệnh admin cần phân loại:\n{text}"
-                    ),
-                },
-            ],
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": 0
+            }
         }
 
-        response = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        response = requests.post(self.url, json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
 
-        message_content = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
+        if data and "candidates" in data and len(data["candidates"]) > 0:
+            message_content = data["candidates"][0]["content"]["parts"][0]["text"]
+        else:
+            raise RuntimeError("No candidates found in Gemini response")
 
         parsed = self._parse_json(message_content)
         return self._normalize_result(parsed, raw_response=data)

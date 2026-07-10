@@ -1,147 +1,236 @@
 {% extends "admin/base_site.html" %}
 
 {% block content %}
-<div class="container-fluid">
+<style>
+    .kpi-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+        color: #fff;
+    }
+    .kpi-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    .kpi-card h2 {
+        font-weight: 700;
+        margin-top: 10px;
+    }
+    .kpi-card h5 {
+        font-size: 0.9rem;
+    }
+    .kpi-icon {
+        font-size: 2.5rem;
+        opacity: 0.3;
+        position: absolute;
+        right: 20px;
+        top: 20px;
+    }
+    .bg-gradient-primary { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); }
+    .bg-gradient-info { background: linear-gradient(135deg, #36b9cc 0%, #1a8898 100%); }
+    .bg-gradient-secondary { background: linear-gradient(135deg, #858796 0%, #60616f 100%); }
+    .bg-gradient-success { background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%); }
+    .bg-gradient-warning { background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%); color: #fff;}
+    .bg-gradient-danger { background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%); }
 
-  <h1 class="mb-4">Dashboard tổng quan</h1>
+    .chart-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .chart-card .card-header {
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+        font-weight: bold;
+        color: #4e73df;
+    }
+</style>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container-fluid py-3">
+
+  <h1 class="mb-4 text-gray-800 font-weight-bold">Dashboard Tổng Quan</h1>
+
+  <!-- Top KPIs -->
   <div class="row">
     <div class="col-md-3">
-      <div class="card text-white bg-primary mb-3">
+      <div class="card kpi-card bg-gradient-primary mb-4 position-relative">
         <div class="card-body">
-          <h5>Tin nhắn hôm nay</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Tin nhắn hôm nay</h5>
           <h2>{{ messages_today }}</h2>
+          <i class="fas fa-comment-dots kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card text-white bg-info mb-3">
+      <div class="card kpi-card bg-gradient-info mb-4 position-relative">
         <div class="card-body">
-          <h5>Tin Zalo hôm nay</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Tin Zalo hôm nay</h5>
           <h2>{{ zalo_messages_today }}</h2>
+          <i class="fas fa-comment kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card text-white bg-secondary mb-3">
+      <div class="card kpi-card bg-gradient-secondary mb-4 position-relative">
         <div class="card-body">
-          <h5>Tin Facebook hôm nay</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Tin FB hôm nay</h5>
           <h2>{{ facebook_messages_today }}</h2>
+          <i class="fab fa-facebook-messenger kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card text-white bg-success mb-3">
+      <div class="card kpi-card bg-gradient-success mb-4 position-relative">
         <div class="card-body">
-          <h5>Hội thoại đang mở</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Hội thoại đang mở</h5>
           <h2>{{ open_conversations }}</h2>
+          <i class="fas fa-comments kpi-icon"></i>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="row mt-3">
+  <!-- Bottom KPIs -->
+  <div class="row">
     <div class="col-md-3">
-      <div class="card mb-3">
+      <div class="card kpi-card bg-gradient-warning mb-4 position-relative">
         <div class="card-body">
-          <h5>Hồ sơ hôm nay</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Hồ sơ hôm nay</h5>
           <h2>{{ submissions_today }}</h2>
+          <i class="fas fa-folder-open kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card mb-3">
+      <div class="card kpi-card bg-gradient-danger mb-4 position-relative">
         <div class="card-body">
-          <h5>Hồ sơ chưa phản hồi</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Hồ sơ chờ phản hồi</h5>
           <h2>{{ pending_submissions }}</h2>
+          <i class="fas fa-exclamation-circle kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card mb-3">
+      <div class="card kpi-card bg-dark mb-4 position-relative">
         <div class="card-body">
-          <h5>Ưu tiên cao</h5>
-          <h2>{{ high_priority_submissions }}</h2>
+          <h5 class="card-title text-uppercase font-weight-bold">Ưu tiên cao</h5>
+          <h2 class="text-danger">{{ high_priority_submissions }}</h2>
+          <i class="fas fa-fire kpi-icon"></i>
         </div>
       </div>
     </div>
 
     <div class="col-md-3">
-      <div class="card mb-3">
+      <div class="card kpi-card bg-gradient-success mb-4 position-relative">
         <div class="card-body">
-          <h5>Báo cáo hoàn tất hôm nay</h5>
+          <h5 class="card-title text-uppercase font-weight-bold">Báo cáo hoàn tất</h5>
           <h2>{{ reports_completed_today }}</h2>
+          <i class="fas fa-file-excel kpi-icon"></i>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="row mt-4">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          Tin nhắn 7 ngày gần nhất
+  <!-- Charts -->
+  <div class="row">
+    <!-- Line Chart -->
+    <div class="col-md-8">
+      <div class="card chart-card mb-4">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold">Biểu đồ tin nhắn (7 ngày gần nhất)</h6>
         </div>
         <div class="card-body">
-          <table class="table table-sm table-bordered">
-            <thead>
-              <tr>
-                <th>Ngày</th>
-                <th>Số tin nhắn</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in message_chart %}
-              <tr>
-                <td>{{ item.day }}</td>
-                <td>{{ item.total }}</td>
-              </tr>
-              {% empty %}
-              <tr>
-                <td colspan="2">Chưa có dữ liệu</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+          <canvas id="messageChart" height="100"></canvas>
         </div>
       </div>
     </div>
 
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          Hồ sơ theo trạng thái
+    <!-- Doughnut Chart -->
+    <div class="col-md-4">
+      <div class="card chart-card mb-4">
+        <div class="card-header py-3">
+          <h6 class="m-0 font-weight-bold">Hồ sơ theo trạng thái</h6>
         </div>
         <div class="card-body">
-          <table class="table table-sm table-bordered">
-            <thead>
-              <tr>
-                <th>Trạng thái</th>
-                <th>Số lượng</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in status_chart %}
-              <tr>
-                <td>{{ item.status }}</td>
-                <td>{{ item.total }}</td>
-              </tr>
-              {% empty %}
-              <tr>
-                <td colspan="2">Chưa có dữ liệu</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+          <canvas id="statusChart" height="220"></canvas>
         </div>
       </div>
     </div>
   </div>
 
 </div>
+
+<!-- ChartJS Initialization -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Parse data passed from view (injected as unquoted JSON directly via safe filter)
+    const messageData = {{ message_chart_json|safe }};
+    const statusData = {{ status_chart_json|safe }};
+
+    // 1. Message Line Chart
+    const msgLabels = messageData.map(item => item.day);
+    const msgValues = messageData.map(item => item.total);
+
+    const ctxMsg = document.getElementById('messageChart').getContext('2d');
+    new Chart(ctxMsg, {
+        type: 'line',
+        data: {
+            labels: msgLabels,
+            datasets: [{
+                label: 'Số lượng tin nhắn',
+                data: msgValues,
+                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                borderColor: 'rgba(78, 115, 223, 1)',
+                pointBackgroundColor: 'rgba(78, 115, 223, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(78, 115, 223, 1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            }
+        }
+    });
+
+    // 2. Status Doughnut Chart
+    const statusLabels = statusData.map(item => item.status);
+    const statusValues = statusData.map(item => item.total);
+    const statusColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
+
+    const ctxStatus = document.getElementById('statusChart').getContext('2d');
+    new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusValues,
+                backgroundColor: statusColors,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

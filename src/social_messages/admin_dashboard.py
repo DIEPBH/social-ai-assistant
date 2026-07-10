@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -61,6 +62,11 @@ def admin_dashboard(request):
         .order_by("status")
     )
 
+    message_chart_data = [
+        {"day": item["day"].strftime("%Y-%m-%d") if item["day"] else "", "total": item["total"]}
+        for item in message_chart_raw
+    ]
+
     context = {
         "title": "Dashboard tổng quan",
         "messages_today": messages_today,
@@ -71,8 +77,8 @@ def admin_dashboard(request):
         "pending_submissions": pending_submissions,
         "high_priority_submissions": high_priority_submissions,
         "reports_completed_today": reports_completed_today,
-        "message_chart": list(message_chart_raw),
-        "status_chart": list(status_chart_raw),
+        "message_chart_json": json.dumps(message_chart_data),
+        "status_chart_json": json.dumps(list(status_chart_raw)),
     }
 
     return render(request, "admin/custom_dashboard.html", context)
