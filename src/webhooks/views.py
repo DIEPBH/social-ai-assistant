@@ -8,12 +8,60 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message
+from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message, IntegrationLog
 from social_messages.services.intake_router import IntakeRouter
 from social_messages.services.outbound_message_service import OutboundMessageService
 from social_messages.services.webhook_normalizer import WebhookNormalizer
 from social_messages.tasks import process_intake_submission, process_admin_command
 from social_messages.services.admin_guard import AdminGuard
+import time
+from functools import wraps
+
+def log_integration_webhook(system_name):
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            start_time = time.time()
+            try:
+                body = request.body.decode("utf-8")
+                request_payload = json.loads(body) if body else {}
+            except Exception:
+                request_payload = {"raw_body": request.body.decode("utf-8", errors="replace")}
+            
+            error_message = ""
+            try:
+                response = view_func(request, *args, **kwargs)
+            except Exception as e:
+                error_message = str(e)
+                raise
+            finally:
+                processing_time_ms = (time.time() - start_time) * 1000
+                
+                if 'response' in locals():
+                    status_code = response.status_code
+                    try:
+                        response_payload = json.loads(response.content.decode("utf-8")) if response.content else {}
+                    except Exception:
+                        response_payload = {"raw_content": response.content.decode("utf-8", errors="replace")}
+                else:
+                    status_code = 500
+                    response_payload = {}
+
+                IntegrationLog.objects.create(
+                    system=system_name,
+                    direction="inbound",
+                    endpoint=request.path,
+                    method=request.method,
+                    status_code=status_code,
+                    request_payload=request_payload,
+                    response_payload=response_payload,
+                    error_message=error_message,
+                    processing_time_ms=processing_time_ms
+                )
+            
+            return response
+        return _wrapped_view
+    return decorator
 
 
 
@@ -67,6 +115,7 @@ def test_message_webhook(request):
 
 
 @csrf_exempt
+@log_integration_webhook("facebook_webhook")
 def facebook_webhook(request):
     logger.info("FACEBOOK WEBHOOK HIT method=%s body=%s", request.method, request.body.decode("utf-8"))
     if request.method == "GET":
@@ -115,6 +164,7 @@ def facebook_webhook(request):
 
 
 @csrf_exempt
+@log_integration_webhook("zalo_webhook")
 def zalo_webhook(request):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST method is allowed"}, status=405)
@@ -205,6 +255,21 @@ def handle_admin_incoming(conversation, payload, user_text):
 
 
 def handle_citizen_incoming(conversation, payload, user_text):
+    sent_at = parse_sent_at(payload.get("sent_at"))
+
+    message, created = Message.objects.get_or_create(
+        platform_message_id=payload.get("platform_message_id", ""),
+        defaults={
+            "conversation": conversation,
+            "sender_id": payload.get("sender_id", ""),
+            "sender_type": "admin" if AdminGuard().is_zalo_admin(payload.get("sender_id", "")) else "customer",
+            "message_type": payload.get("message_type", "text"),
+            "content": user_text,
+            "sent_at": sent_at,
+            "raw_payload": payload.get("raw_payload", payload),
+        },
+    )
+
     router = IntakeRouter()
     route_result = router.route(conversation=conversation, user_text=user_text)
 
@@ -224,20 +289,6 @@ def handle_citizen_incoming(conversation, payload, user_text):
         }
 
     if route_result["action"] == "save_and_process":
-        sent_at = parse_sent_at(payload.get("sent_at"))
-
-        message, created = Message.objects.get_or_create(
-            platform_message_id=payload.get("platform_message_id", ""),
-            defaults={
-                "conversation": conversation,
-                "sender_id": payload.get("sender_id", ""),
-                "sender_type": "admin" if AdminGuard().is_zalo_admin(payload.get("sender_id", "")) else "customer",
-                "message_type": payload.get("message_type", "text"),
-                "content": user_text,
-                "sent_at": sent_at,
-                "raw_payload": payload.get("raw_payload", payload),
-            },
-        )
 
         cleaned = route_result["cleaned_data"]
         mapped = cleaned.get("mapped_data", {})
@@ -284,12 +335,14 @@ def handle_citizen_incoming(conversation, payload, user_text):
         conversation.current_intent = ""
         conversation.form_retry_count = 0
         conversation.last_bot_prompt = ""
+        conversation.state_entered_at = None
         conversation.save(update_fields=[
             "current_state",
             "current_category",
             "current_intent",
             "form_retry_count",
             "last_bot_prompt",
+            "state_entered_at",
             "updated_at",
         ])
 

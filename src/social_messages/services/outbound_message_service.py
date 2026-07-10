@@ -58,13 +58,42 @@ class OutboundMessageService:
             "message": {"text": text},
         }
 
-        response = requests.post(url, params=params, json=payload, timeout=20)
+        import time
+        from social_messages.models import IntegrationLog
+        
+        start_time = time.time()
+        error_msg = ""
+        response = None
+        try:
+            response = requests.post(url, params=params, json=payload, timeout=20)
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            processing_time_ms = (time.time() - start_time) * 1000
+            resp_json = {}
+            if response:
+                try:
+                    resp_json = response.json()
+                except Exception:
+                    resp_json = {"raw_text": response.text}
+            IntegrationLog.objects.create(
+                system="facebook_api",
+                direction="outbound",
+                endpoint=url,
+                method="POST",
+                status_code=response.status_code if response else None,
+                request_payload=payload,
+                response_payload=resp_json,
+                error_message=error_msg,
+                processing_time_ms=processing_time_ms
+            )
 
         return {
-            "status": "success" if response.ok else "error",
+            "status": "success" if response and response.ok else "error",
             "provider": "facebook",
-            "status_code": response.status_code,
-            "body": response.text,
+            "status_code": response.status_code if response else None,
+            "body": response.text if response else str(error_msg),
         }
     # outbound_message_service.py
     def send_text_with_buttons(self, conversation, text, buttons):

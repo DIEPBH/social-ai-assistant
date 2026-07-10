@@ -212,4 +212,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "social_messages.tasks.refresh_all_zalo_tokens_if_needed",
         "schedule": 1800.0,
     },
+    "cleanup-integration-logs-daily": {
+        "task": "social_messages.tasks.cleanup_integration_logs",
+        "schedule": 86400.0,
+    },
 }

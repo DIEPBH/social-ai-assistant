@@ -115,8 +115,16 @@ class MessageIntakeFilter:
         normalized_key = self._normalize(raw_key)
         for field in fields:
             candidates = [field.label, field.field_key, *(field.aliases or [])]
-            if normalized_key in {self._normalize(candidate) for candidate in candidates if candidate}:
-                return field
+            normalized_candidates = [self._normalize(c) for c in candidates if c]
+            
+            condition = getattr(field, 'match_condition', '==')
+            if condition == 'like':
+                for candidate in normalized_candidates:
+                    if candidate in normalized_key or normalized_key in candidate:
+                        return field
+            else:
+                if normalized_key in normalized_candidates:
+                    return field
         return None
 
     def _apply_rules(self, category, raw_text, extracted, mapped_data):

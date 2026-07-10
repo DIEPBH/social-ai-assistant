@@ -38,21 +38,6 @@ services:
       - redis
       - celery_worker
 
-  openclaw:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: social_ai_openclaw
-    restart: unless-stopped
-    ports:
-      - "18789:18789"
-    volumes:
-      - ./openclaw/data:/data
-      - ./openclaw/config:/config
-      - ./openclaw_config:/home/node/.openclaw
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
-
   db:
     image: postgres:15
     container_name: social_ai_db

@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, Dict
 
-from .openclaw_analyzer import OpenClawAnalyzer
+from .gemini_analyzer import GeminiAnalyzer
 
 
 class AIAnalysisService:
@@ -12,13 +12,13 @@ class AIAnalysisService:
     def analyze_message(self, content: Any) -> Dict[str, Any]:
         normalized_content = self._normalize_input(content)
 
-        if self.engine in ["stub", "openclaw_service"]:
-            analyzer = OpenClawAnalyzer()
+        if self.engine in ["stub", "gemini"]:
+            analyzer = GeminiAnalyzer()
             result = analyzer.analyze_message(normalized_content)
             result["selected_engine"] = self.engine
             return result
 
-        analyzer = OpenClawAnalyzer()
+        analyzer = GeminiAnalyzer()
         result = analyzer.analyze_message(normalized_content)
         result["selected_engine"] = "default_fallback"
         return result

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from celery import shared_task
 from django.conf import settings
@@ -686,3 +687,16 @@ def start_of_day(target_date):
 
 def end_of_day(target_date):
     return timezone.make_aware(datetime.combine(target_date, time.max))
+
+@shared_task
+def cleanup_integration_logs():
+    from social_messages.models import IntegrationLog
+    retention_days = int(os.getenv("LOG_RETENTION_DAYS", 7))
+    cutoff_date = timezone.now() - timedelta(days=retention_days)
+    
+    deleted_count, _ = IntegrationLog.objects.filter(created_at__lt=cutoff_date).delete()
+    logger.info("Cleaned up %s old IntegrationLogs older than %s days", deleted_count, retention_days)
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+    }

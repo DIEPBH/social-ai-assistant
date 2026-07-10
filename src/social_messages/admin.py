@@ -10,6 +10,7 @@ from .models import (
     IntakeSubmission,
     IntakeTemplate,
     IntakeTemplateField,
+    IntegrationLog,
     IntakeValidationRule,
     KeywordRule,
     Message,
@@ -35,12 +36,40 @@ class IntakeTemplateFieldInline(admin.TabularInline):
         "field_key",
         "target_field",
         "field_type",
+        "match_condition",
         "is_required",
         "aliases",
         "help_text",
         "is_active",
     )
 
+@admin.register(IntegrationLog)
+class IntegrationLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "system",
+        "direction",
+        "endpoint",
+        "method",
+        "status_code",
+        "processing_time_ms",
+        "created_at",
+    )
+    search_fields = ("endpoint", "request_payload", "response_payload", "error_message")
+    list_filter = ("system", "direction", "status_code", "created_at")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "system",
+        "direction",
+        "endpoint",
+        "method",
+        "status_code",
+        "request_payload",
+        "response_payload",
+        "error_message",
+        "processing_time_ms",
+        "created_at",
+    )
 
 @admin.register(IntakeCategory)
 class IntakeCategoryAdmin(admin.ModelAdmin):
@@ -86,9 +115,9 @@ class IntakeTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(IntakeTemplateField)
 class IntakeTemplateFieldAdmin(admin.ModelAdmin):
-    list_display = ("id", "template", "order", "label", "field_key", "target_field", "is_required", "is_active")
+    list_display = ("id", "template", "order", "label", "field_key", "target_field", "match_condition", "is_required", "is_active")
     search_fields = ("label", "field_key", "template__category__name")
-    list_filter = ("is_active", "is_required", "target_field", "field_type", "template__category")
+    list_filter = ("is_active", "is_required", "match_condition", "target_field", "field_type", "template__category")
     ordering = ("template__category__menu_order", "template", "order")
 
 

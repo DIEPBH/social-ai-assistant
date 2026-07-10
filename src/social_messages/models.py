@@ -107,11 +107,22 @@ class IntakeTemplateField(models.Model):
         ("choice", "Lựa chọn"),
     ]
 
+    MATCH_CONDITION_CHOICES = [
+        ("==", "Chính xác (==)"),
+        ("like", "Chứa từ khóa (like)"),
+    ]
+
     template = models.ForeignKey(
         IntakeTemplate,
         on_delete=models.CASCADE,
         related_name="fields",
         verbose_name="Mẫu tiếp nhận",
+    )
+    match_condition = models.CharField(
+        max_length=10,
+        choices=MATCH_CONDITION_CHOICES,
+        default="==",
+        verbose_name="Điều kiện so sánh",
     )
     field_key = models.SlugField(max_length=80, verbose_name="Mã trường")
     label = models.CharField(max_length=255, verbose_name="Nhãn hiển thị")
@@ -304,6 +315,7 @@ class Conversation(models.Model):
     last_message_at = models.DateTimeField(blank=True, null=True, verbose_name="Tin nhắn cuối")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open", verbose_name="Trạng thái")
     current_state = models.CharField(max_length=100, choices=STATE_CHOICES, blank=True, default="", verbose_name="Trạng thái luồng")
+    state_entered_at = models.DateTimeField(blank=True, null=True, verbose_name="Thời điểm chuyển trạng thái")
     current_category = models.ForeignKey(
         IntakeCategory,
         on_delete=models.SET_NULL,
@@ -497,3 +509,39 @@ class IntakeSubmission(models.Model):
     def __str__(self):
         category_name = self.category.name if self.category else self.intent
         return f"{category_name} - {self.citizen_name or self.conversation_id}"
+
+class IntegrationLog(models.Model):
+    SYSTEM_CHOICES = [
+        ("zalo_webhook", "Zalo Webhook"),
+        ("facebook_webhook", "Facebook Webhook"),
+        ("zalo_api", "Zalo API"),
+        ("facebook_api", "Facebook API"),
+        ("gemini_api", "Gemini API"),
+        ("system", "Hệ thống"),
+    ]
+    DIRECTION_CHOICES = [
+        ("inbound", "Gọi vào (Inbound)"),
+        ("outbound", "Gọi ra (Outbound)"),
+    ]
+
+    system = models.CharField(max_length=50, choices=SYSTEM_CHOICES, verbose_name="Hệ thống")
+    direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES, verbose_name="Chiều gọi")
+    endpoint = models.CharField(max_length=500, blank=True, default="", verbose_name="Endpoint/URL")
+    method = models.CharField(max_length=20, blank=True, default="POST", verbose_name="Phương thức")
+    status_code = models.IntegerField(null=True, blank=True, verbose_name="Mã HTTP")
+    
+    request_payload = models.JSONField(null=True, blank=True, verbose_name="Payload gửi đi/nhận vào")
+    response_payload = models.JSONField(null=True, blank=True, verbose_name="Payload trả về")
+    error_message = models.TextField(blank=True, default="", verbose_name="Thông báo lỗi")
+    
+    processing_time_ms = models.FloatField(null=True, blank=True, verbose_name="Thời gian xử lý (ms)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian tạo")
+
+    class Meta:
+        db_table = "integration_logs"
+        verbose_name = "Lịch sử API (Integration Log)"
+        verbose_name_plural = "Lịch sử API (Integration Logs)"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.direction.upper()}] {self.system} - {self.status_code}"
