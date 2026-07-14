@@ -3,13 +3,19 @@ import django
 import sys
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-os.environ['ZALO_ADMIN_SENDER_IDS'] = 'admin_001'
 django.setup()
 
-from social_messages.models import Channel, Conversation, Message
+from social_messages.models import Channel, Conversation, Message, UserProfile
 from social_messages.tasks import process_admin_command
+from django.contrib.auth.models import User
 
 def run_test():
+    # Setup test Zalo admin in database
+    admin_user, _ = User.objects.get_or_create(username='test_admin', defaults={'is_active': True, 'is_staff': True})
+    profile, _ = UserProfile.objects.get_or_create(user=admin_user)
+    profile.zalo_id = 'admin_001'
+    profile.save()
+
     channel, _ = Channel.objects.get_or_create(
         platform='zalo',
         defaults={'name': 'Zalo Test', 'is_active': True}

@@ -1,0 +1,55 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    {% if original and not request.user.is_superuser and user_assignment %}
+        {% if user_assignment.role == 'main' %}
+            {% if original.processing_status == 'pending' and user_assignment.status == 'pending' %}
+                <li>
+                    <button type="button" onclick="submitAcceptAction('{% url 'admin:intakesubmission_action' original.pk 'accept' %}');" class="btn btn-success" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-left: 10px; cursor: pointer;">
+                        <i class="fas fa-check"></i> Tiếp nhận
+                    </button>
+                    <script>
+                        function submitAcceptAction(url) {
+                            var form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = url;
+                            var csrf = document.createElement('input');
+                            csrf.type = 'hidden';
+                            csrf.name = 'csrfmiddlewaretoken';
+                            csrf.value = '{{ csrf_token }}';
+                            form.appendChild(csrf);
+                            document.body.appendChild(form);
+                            form.submit();
+                        }
+                    </script>
+                </li>
+                <li>
+                    <a href="{% url 'admin:intakesubmission_action' original.pk 'return' %}" class="btn btn-danger" style="background-color: #dc3545; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; margin-left: 10px;">
+                        <i class="fas fa-undo"></i> Trả lại
+                    </a>
+                </li>
+            {% elif original.processing_status == 'in_progress' and user_assignment.status == 'in_progress' %}
+                <li>
+                    <a href="{% url 'admin:intakesubmission_action' original.pk 'complete' %}" class="btn btn-primary" style="background-color: #007bff; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; margin-left: 10px;">
+                        <i class="fas fa-check-double"></i> Hoàn thành xử lý
+                    </a>
+                </li>
+            {% endif %}
+        {% elif user_assignment.role == 'co_handler' %}
+            {% if original.processing_status == 'in_progress' and user_assignment.status in 'pending,in_progress' %}
+                <li>
+                    <a href="{% url 'admin:intakesubmission_action' original.pk 'complete' %}" class="btn btn-primary" style="background-color: #007bff; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; margin-left: 10px;">
+                        <i class="fas fa-check-double"></i> Hoàn thành xử lý
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin:intakesubmission_action' original.pk 'return' %}" class="btn btn-danger" style="background-color: #dc3545; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; margin-left: 10px;">
+                        <i class="fas fa-undo"></i> Trả lại
+                    </a>
+                </li>
+            {% endif %}
+        {% endif %}
+    {% endif %}
+{% endblock %}

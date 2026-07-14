@@ -457,6 +457,14 @@ class IntakeSubmission(models.Model):
         ("rejected", "Không hợp lệ"),
     ]
 
+    PROCESSING_STATUS_CHOICES = [
+        ("unassigned", "Chưa phân công"),
+        ("pending", "Chưa xử lý"),
+        ("in_progress", "Đang xử lý"),
+        ("completed", "Đã xử lý"),
+        ("returned", "Trả lại"),
+    ]
+
     conversation = models.ForeignKey(
         "social_messages.Conversation",
         on_delete=models.CASCADE,
@@ -497,7 +505,8 @@ class IntakeSubmission(models.Model):
     response_text = models.TextField(blank=True, default="", verbose_name="Phản hồi")
 
     raw_extracted_data = models.JSONField(default=dict, blank=True, verbose_name="Dữ liệu trích xuất")
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="received", verbose_name="Trạng thái")
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="received", verbose_name="Trạng thái hệ thống")
+    processing_status = models.CharField(max_length=20, choices=PROCESSING_STATUS_CHOICES, default="unassigned", verbose_name="Trạng thái xử lý")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
 
     class Meta:
@@ -509,6 +518,78 @@ class IntakeSubmission(models.Model):
     def __str__(self):
         category_name = self.category.name if self.category else self.intent
         return f"{category_name} - {self.citizen_name or self.conversation_id}"
+
+class IntakeSubmissionAssignment(models.Model):
+    ROLE_CHOICES = [
+        ("main", "Xử lý chính"),
+        ("co_handler", "Phối hợp"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "Chưa xử lý"),
+        ("in_progress", "Đang xử lý"),
+        ("completed", "Đã xử lý"),
+        ("returned", "Trả lại"),
+    ]
+    
+    submission = models.ForeignKey(
+        IntakeSubmission,
+        on_delete=models.CASCADE,
+        related_name="assignments",
+        verbose_name="Hồ sơ tiếp nhận"
+    )
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="intake_assignments",
+        verbose_name="Người xử lý"
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="co_handler", verbose_name="Vai trò")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="Trạng thái")
+    return_reason = models.TextField(blank=True, default="", verbose_name="Lý do trả lại")
+    processing_note = models.TextField(blank=True, default="", verbose_name="Thông tin xử lý")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày phân công")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
+
+    class Meta:
+        db_table = "intake_submission_assignments"
+        verbose_name = "Phân công xử lý"
+        verbose_name_plural = "Phân công xử lý"
+
+    def __str__(self):
+        return f"{self.get_role_display()} - {self.user.username}"
+
+class IntakeSubmissionHistory(models.Model):
+    ACTION_CHOICES = [
+        ("assign", "Phân công xử lý"),
+        ("accept", "Tiếp nhận hồ sơ"),
+        ("return", "Trả lại hồ sơ"),
+        ("complete", "Hoàn thành xử lý"),
+    ]
+    
+    submission = models.ForeignKey(
+        IntakeSubmission,
+        on_delete=models.CASCADE,
+        related_name="history",
+        verbose_name="Hồ sơ tiếp nhận"
+    )
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="intake_history",
+        verbose_name="Người thực hiện"
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, verbose_name="Hành động")
+    note = models.TextField(blank=True, default="", verbose_name="Ghi chú")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian")
+
+    class Meta:
+        db_table = "intake_submission_history"
+        verbose_name = "Lịch sử xử lý"
+        verbose_name_plural = "Lịch sử xử lý"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.submission.id} - {self.get_action_display()} - {self.user.username}"
 
 class IntegrationLog(models.Model):
     SYSTEM_CHOICES = [
@@ -545,3 +626,85 @@ class IntegrationLog(models.Model):
 
     def __str__(self):
         return f"[{self.direction.upper()}] {self.system} - {self.status_code}"
+
+
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile", verbose_name="Người dùng")
+    zalo_id = models.CharField(max_length=100, blank=True, default="", verbose_name="Zalo ID")
+    avatar = models.FileField(upload_to="avatars/", blank=True, null=True, verbose_name="Ảnh đại diện")
+
+    class Meta:
+        db_table = "user_profiles"
+        verbose_name = "Hồ sơ người dùng"
+        verbose_name_plural = "Hồ sơ người dùng"
+
+    def __str__(self):
+        return self.user.username
+
+
+@receiver(post_save, sender=User)
+def create_or_save_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+    else:
+        if not hasattr(instance, "profile"):
+            UserProfile.objects.create(user=instance)
+        else:
+            instance.profile.save()
+
+
+@property
+def user_avatar_property(self):
+    try:
+        if self.profile and self.profile.avatar:
+            return self.profile.avatar
+    except UserProfile.DoesNotExist:
+        pass
+    return "/static/images/default_avatar.jpg"
+
+User.add_to_class("avatar", user_avatar_property)
+
+
+from django.db.models.signals import pre_save, post_delete
+import os
+
+@receiver(pre_save, sender=UserProfile)
+def auto_delete_file_on_change(sender, instance, **kwargs):
+    """
+    Deletes old file from filesystem when corresponding UserProfile object is updated with a new file.
+    """
+    if not instance.pk:
+        return False
+
+    try:
+        old_profile = UserProfile.objects.get(pk=instance.pk)
+    except UserProfile.DoesNotExist:
+        return False
+
+    old_avatar = old_profile.avatar
+    new_avatar = instance.avatar
+    if old_avatar and old_avatar != new_avatar:
+        try:
+            if os.path.isfile(old_avatar.path):
+                os.remove(old_avatar.path)
+        except Exception:
+            pass
+
+
+@receiver(post_delete, sender=UserProfile)
+def auto_delete_file_on_delete(sender, instance, **kwargs):
+    """
+    Deletes file from filesystem when corresponding UserProfile object is deleted.
+    """
+    if instance.avatar:
+        try:
+            if os.path.isfile(instance.avatar.path):
+                os.remove(instance.avatar.path)
+        except Exception:
+            pass
+
+

@@ -1,5 +1,9 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils.html import format_html
+from django.core.exceptions import ValidationError
+from django.forms.models import BaseInlineFormSet
+from django.urls import path
+from django.shortcuts import redirect, render
 
 from .models import (
     AdminCommand,
@@ -8,6 +12,8 @@ from .models import (
     Conversation,
     IntakeCategory,
     IntakeSubmission,
+    IntakeSubmissionAssignment,
+    IntakeSubmissionHistory,
     IntakeTemplate,
     IntakeTemplateField,
     IntegrationLog,
@@ -289,6 +295,75 @@ class ReportAdmin(admin.ModelAdmin):
         return badge(obj.status, color_map.get(obj.status, "secondary"))
 
 
+class IntakeSubmissionAssignmentFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        
+        main_handler_count = 0
+        assigned_users = set()
+        for form in self.forms:
+            if self.can_delete and self._should_delete_form(form):
+                continue
+                
+            user = form.cleaned_data.get('user')
+            if user:
+                if user.id in assigned_users:
+                    raise ValidationError(f"Tài khoản '{user.username}' không được phép xuất hiện nhiều lần trong danh sách phân công.")
+                assigned_users.add(user.id)
+                
+            role = form.cleaned_data.get('role')
+            if role == 'main':
+                main_handler_count += 1
+                
+        if main_handler_count > 1:
+            raise ValidationError("Chỉ được phép có duy nhất 1 người xử lý chính.")
+
+class IntakeSubmissionAssignmentInline(admin.TabularInline):
+    model = IntakeSubmissionAssignment
+    formset = IntakeSubmissionAssignmentFormSet
+    extra = 1
+    fields = ('user', 'role', 'status', 'return_reason', 'processing_note')
+    
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.groups.filter(name='Chuyên viên').exists() and not request.user.is_superuser:
+            return self.fields
+        return ('status', 'return_reason', 'processing_note')
+        
+    def has_change_permission(self, request, obj=None):
+        if request.user.groups.filter(name='Chuyên viên').exists() and not request.user.is_superuser:
+            return False
+        if obj and obj.processing_status not in ['unassigned', 'returned']:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request, obj):
+        if request.user.groups.filter(name='Chuyên viên').exists() and not request.user.is_superuser:
+            return False
+        if obj and obj.processing_status not in ['unassigned', 'returned']:
+            return False
+        return super().has_add_permission(request, obj)
+        
+    def has_delete_permission(self, request, obj=None):
+        if request.user.groups.filter(name='Chuyên viên').exists() and not request.user.is_superuser:
+            return False
+        if obj and obj.processing_status not in ['unassigned', 'returned']:
+            return False
+        return super().has_delete_permission(request, obj)
+
+class IntakeSubmissionHistoryInline(admin.TabularInline):
+    model = IntakeSubmissionHistory
+    extra = 0
+    fields = ('created_at', 'user', 'action', 'note')
+    readonly_fields = ('created_at', 'user', 'action', 'note')
+
+    def has_add_permission(self, request, obj):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 @admin.register(IntakeSubmission)
 class IntakeSubmissionAdmin(admin.ModelAdmin):
     list_display = (
@@ -297,12 +372,164 @@ class IntakeSubmissionAdmin(admin.ModelAdmin):
         "citizen_name",
         "phone_number",
         "status_badge",
+        "processing_status_badge",
         "priority",
         "created_at",
     )
     search_fields = ("citizen_name", "phone_number", "content", "category__name", "intent")
-    list_filter = ("category", "intent", "status", "priority", "created_at")
+    list_filter = ("category", "intent", "status", "processing_status", "priority", "created_at")
     readonly_fields = ("raw_extracted_data", "created_at")
+    inlines = [IntakeSubmissionAssignmentInline, IntakeSubmissionHistoryInline]
+    change_form_template = "admin/social_messages/intakesubmission/change_form.html"
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        if object_id and request.user.groups.filter(name='Chuyên viên').exists() and not request.user.is_superuser:
+            assignment = IntakeSubmissionAssignment.objects.filter(submission_id=object_id, user=request.user).order_by('-created_at').first()
+            if assignment:
+                extra_context['user_assignment'] = assignment
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or request.user.groups.filter(name='Quản trị viên').exists():
+            return qs
+        if request.user.groups.filter(name='Chuyên viên').exists():
+            return qs.filter(assignments__user=request.user).distinct()
+        return qs.none()
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for obj in formset.deleted_objects:
+            obj.delete()
+        for instance in instances:
+            instance.save()
+        formset.save_m2m()
+
+        if formset.model == IntakeSubmissionAssignment:
+            submission = form.instance
+            has_assignments = submission.assignments.exists()
+            if has_assignments and submission.processing_status in ['unassigned', 'returned']:
+                submission.processing_status = 'pending'
+                submission.save(update_fields=['processing_status'])
+                
+                # Reset assignments and create history
+                for assignment in submission.assignments.all():
+                    assignment.status = 'pending'
+                    assignment.return_reason = ''
+                    assignment.processing_note = ''
+                    assignment.save(update_fields=['status', 'return_reason', 'processing_note'])
+                    
+                    IntakeSubmissionHistory.objects.create(
+                        submission=submission,
+                        user=assignment.user,
+                        action='assign',
+                        note=f"Phân công vai trò: {assignment.get_role_display()}"
+                    )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<path:object_id>/action/<str:action_name>/",
+                self.admin_site.admin_view(self.process_action_view),
+                name="intakesubmission_action",
+            ),
+        ]
+        return custom_urls + urls
+
+    def process_action_view(self, request, object_id, action_name):
+        obj = self.get_object(request, object_id)
+        if not obj:
+            return redirect("admin:social_messages_intakesubmission_changelist")
+
+        assignment = IntakeSubmissionAssignment.objects.filter(submission=obj, user=request.user).order_by('-created_at').first()
+        if not assignment:
+            messages.error(request, "Bạn không được phân công xử lý hồ sơ này.")
+            return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+        if request.method == "POST":
+            if action_name == "accept":
+                if assignment.role != "main":
+                    messages.error(request, "Chỉ Người xử lý chính mới được phép Tiếp nhận hồ sơ.")
+                    return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+                if obj.processing_status == "pending" and assignment.status == "pending":
+                    obj.processing_status = "in_progress"
+                    obj.save(update_fields=["processing_status"])
+                    assignment.status = "in_progress"
+                    assignment.save(update_fields=["status"])
+                    
+                    IntakeSubmissionHistory.objects.create(
+                        submission=obj,
+                        user=request.user,
+                        action='accept',
+                        note="Đã tiếp nhận hồ sơ để bắt đầu xử lý."
+                    )
+                    messages.success(request, "Đã tiếp nhận hồ sơ.")
+                return redirect("admin:social_messages_intakesubmission_change", object_id)
+            elif action_name == "return":
+                if assignment.role == "co_handler" and obj.processing_status != "in_progress":
+                    messages.error(request, "Người phối hợp chỉ được thao tác khi hồ sơ Đang xử lý.")
+                    return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+                reason = request.POST.get("return_reason")
+                if reason:
+                    obj.processing_status = "returned"
+                    obj.save(update_fields=["processing_status"])
+                    assignment.status = "returned"
+                    assignment.return_reason = reason
+                    assignment.save(update_fields=["status", "return_reason"])
+                    
+                    IntakeSubmissionHistory.objects.create(
+                        submission=obj,
+                        user=request.user,
+                        action='return',
+                        note=reason
+                    )
+                    messages.success(request, "Đã trả lại hồ sơ.")
+                    return redirect("admin:social_messages_intakesubmission_change", object_id)
+            elif action_name == "complete":
+                if assignment.role == "co_handler" and obj.processing_status != "in_progress":
+                    messages.error(request, "Người phối hợp chỉ được thao tác khi hồ sơ Đang xử lý.")
+                    return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+                if assignment.role == "main":
+                    pending_co_handlers = obj.assignments.filter(role="co_handler").exclude(status="completed")
+                    if pending_co_handlers.exists():
+                        messages.error(request, "Không thể hoàn thành xử lý. Yêu cầu tất cả người phối hợp phải hoàn thành trước.")
+                        return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+                note = request.POST.get("processing_note")
+                if note:
+                    assignment.status = "completed"
+                    assignment.processing_note = note
+                    assignment.save(update_fields=["status", "processing_note"])
+
+                    IntakeSubmissionHistory.objects.create(
+                        submission=obj,
+                        user=request.user,
+                        action='complete',
+                        note=note
+                    )
+
+                    if assignment.role == "main":
+                        obj.processing_status = "completed"
+                        obj.save(update_fields=["processing_status"])
+                    else:
+                        all_completed = not obj.assignments.exclude(status="completed").exists()
+                        if all_completed:
+                            obj.processing_status = "completed"
+                            obj.save(update_fields=["processing_status"])
+                    messages.success(request, "Đã hoàn thành xử lý.")
+                    return redirect("admin:social_messages_intakesubmission_change", object_id)
+
+        context = self.admin_site.each_context(request)
+        context.update({
+            "original": obj,
+            "action_name": action_name,
+        })
+        return render(request, "admin/social_messages/intakesubmission/action_form.html", context)
 
     @admin.display(description="Loại phản ánh")
     def category_badge(self, obj):
@@ -315,7 +542,7 @@ class IntakeSubmissionAdmin(admin.ModelAdmin):
         code = obj.category.code if obj.category else obj.intent
         return badge(label, color_map.get(code, "secondary"))
 
-    @admin.display(description="Trạng thái")
+    @admin.display(description="Trạng thái hệ thống")
     def status_badge(self, obj):
         color_map = {
             "received": "secondary",
@@ -326,3 +553,35 @@ class IntakeSubmissionAdmin(admin.ModelAdmin):
         }
         label = obj.get_status_display() if hasattr(obj, "get_status_display") else obj.status
         return badge(label, color_map.get(obj.status, "secondary"))
+
+    @admin.display(description="Trạng thái xử lý")
+    def processing_status_badge(self, obj):
+        color_map = {
+            "unassigned": "secondary",
+            "pending": "warning",
+            "in_progress": "info",
+            "completed": "success",
+            "returned": "danger",
+        }
+        label = obj.get_processing_status_display() if hasattr(obj, "get_processing_status_display") else obj.processing_status
+        return badge(label, color_map.get(obj.processing_status, "secondary"))
+
+
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
+from .models import UserProfile
+
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Hồ sơ người dùng'
+
+class UserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline,)
+
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+admin.site.register(User, UserAdmin)
+

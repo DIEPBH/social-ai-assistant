@@ -113,13 +113,7 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = os.getenv("TIME_ZONE", "Asia/Ho_Chi_Minh")
 
-# ZALO admin sender IDs (comma separated in env)
-ZALO_ADMIN_SENDER_IDS = [
-    sender_id.strip()
-    for sender_id in os.getenv("ZALO_ADMIN_SENDER_IDS", "").split(",")
-    if sender_id.strip()
-]
-
+# ZALO admin sender IDs configuration has been moved to database-driven user profiles (UserProfile.zalo_id)
 FACEBOOK_VERIFY_TOKEN = os.getenv("FACEBOOK_VERIFY_TOKEN", "")
 ZALO_WEBHOOK_SECRET = os.getenv("ZALO_WEBHOOK_SECRET", "")
 
@@ -158,8 +152,11 @@ JAZZMIN_SETTINGS = {
     "welcome_sign": "Trang quản trị hệ thống tiếp nhận phản ánh",
     "copyright": "Social AI Assistant",
 
+    "user_avatar": "avatar",
+
     "show_sidebar": True,
     "navigation_expanded": True,
+    "custom_css": "css/custom.css",
 
     "topmenu_links": [
     {"name": "Trang chủ", "url": "admin:index", "permissions": ["auth.view_user"]},

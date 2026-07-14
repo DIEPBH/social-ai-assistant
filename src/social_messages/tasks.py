@@ -774,7 +774,12 @@ def send_daily_24h_summary_report():
         return {"status": "error", "reason": "no_zalo_channel"}
 
     sender = ZaloOASender()
-    admin_ids = getattr(settings, "ZALO_ADMIN_SENDER_IDS", [])
+    from social_messages.models import UserProfile
+    admin_ids = list(
+        UserProfile.objects.filter(user__is_active=True)
+        .exclude(zalo_id="")
+        .values_list("zalo_id", flat=True)
+    )
     sent_count = 0
     for admin_id in admin_ids:
         if not str(admin_id).strip():

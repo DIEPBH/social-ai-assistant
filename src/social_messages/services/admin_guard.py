@@ -1,5 +1,7 @@
 from django.conf import settings
 import logging
+from social_messages.models import UserProfile
+
 logger = logging.getLogger(__name__)
 
 class AdminGuard:
@@ -8,13 +10,8 @@ class AdminGuard:
         if not normalized:
             return False
 
-        allowed_ids = {
-            str(item).strip()
-            for item in getattr(settings, "ZALO_ADMIN_SENDER_IDS", [])
-            if str(item).strip()
-        }
-        
-        return normalized in allowed_ids
+        # Check if an active user profile exists with this Zalo ID
+        return UserProfile.objects.filter(zalo_id=normalized, user__is_active=True).exists()
 
     def is_admin_message(self, platform: str, sender_id: str) -> bool:
         if platform != "zalo":
