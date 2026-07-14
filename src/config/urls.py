@@ -22,7 +22,6 @@ from django.conf.urls.static import static
 urlpatterns = [
 	path('admin/', admin.site.urls),
 	path("webhooks/", include("webhooks.urls")),
-    path("ai-bridge/", include("ai_bridge.urls")),
     path("social-messages/", include("social_messages.urls")),
     path("", include("webhooks.urls")),  # Đảm bảo rằng URL gốc cũng được định tuyến đến social_messages
 ]

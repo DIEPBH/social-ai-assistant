@@ -32,7 +32,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "social_messages",
     "webhooks",
-    "ai_bridge",
 ]
 
 MIDDLEWARE = [

@@ -116,6 +116,48 @@ class ZaloOASender:
 
         return self._send_payload(access_token, payload)
 
+    def upload_file(self, access_token: str, file_path: str) -> str:
+        url = "https://openapi.zalo.me/v2.0/oa/upload/file"
+        headers = {
+            "access_token": access_token
+        }
+        with open(file_path, "rb") as f:
+            files = {"file": f}
+            response = requests.post(url, headers=headers, files=files, timeout=60)
+            response.raise_for_status()
+            resp_json = response.json()
+            if resp_json.get("error") != 0:
+                raise ValueError(f"Failed to upload file to Zalo: {resp_json}")
+            return resp_json["data"]["token"]
+
+    def send_file_message(
+        self,
+        access_token: str,
+        user_id: str,
+        file_token: str
+    ) -> Dict[str, Any]:
+        if not access_token:
+            raise ValueError("Missing Zalo OA access token")
+
+        if not user_id:
+            raise ValueError("Missing Zalo user_id")
+
+        payload = {
+            "recipient": {
+                "user_id": user_id,
+            },
+            "message": {
+                "attachment": {
+                    "type": "file",
+                    "payload": {
+                        "token": file_token
+                    }
+                }
+            },
+        }
+
+        return self._send_payload(access_token, payload)
+
     def _send_payload(self, access_token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         headers = {
             "access_token": access_token,

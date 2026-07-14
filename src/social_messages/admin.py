@@ -10,6 +10,7 @@ from .models import (
     AdminCommandPattern,
     Channel,
     Conversation,
+    CustomerBlacklist,
     IntakeCategory,
     IntakeSubmission,
     IntakeSubmissionAssignment,
@@ -293,6 +294,13 @@ class ReportAdmin(admin.ModelAdmin):
             "error": "danger",
         }
         return badge(obj.status, color_map.get(obj.status, "secondary"))
+
+
+@admin.register(CustomerBlacklist)
+class CustomerBlacklistAdmin(admin.ModelAdmin):
+    list_display = ("id", "customer_id", "customer_name", "is_active", "created_at")
+    search_fields = ("customer_id", "customer_name", "reason")
+    list_filter = ("is_active", "created_at")
 
 
 class IntakeSubmissionAssignmentFormSet(BaseInlineFormSet):

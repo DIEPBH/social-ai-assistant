@@ -591,6 +591,24 @@ class IntakeSubmissionHistory(models.Model):
     def __str__(self):
         return f"{self.submission.id} - {self.get_action_display()} - {self.user.username}"
 
+class CustomerBlacklist(models.Model):
+    customer_id = models.CharField(max_length=255, verbose_name="ID khách hàng", unique=True)
+    customer_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Tên khách hàng")
+    reason = models.TextField(blank=True, default="", verbose_name="Lý do chặn")
+    is_active = models.BooleanField(default=True, verbose_name="Đang chặn")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày chặn")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
+
+    class Meta:
+        db_table = "customer_blacklist"
+        verbose_name = "Danh sách chặn"
+        verbose_name_plural = "Danh sách chặn"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.customer_name or self.customer_id} (Blocked)"
+
+
 class IntegrationLog(models.Model):
     SYSTEM_CHOICES = [
         ("zalo_webhook", "Zalo Webhook"),
@@ -707,4 +725,14 @@ def auto_delete_file_on_delete(sender, instance, **kwargs):
         except Exception:
             pass
 
-
+@receiver(post_delete, sender=Report)
+def auto_delete_report_file_on_delete(sender, instance, **kwargs):
+    """
+    Deletes the generated report file from filesystem when corresponding Report object is deleted.
+    """
+    if instance.file_path:
+        try:
+            if os.path.isfile(instance.file_path):
+                os.remove(instance.file_path)
+        except Exception:
+            pass

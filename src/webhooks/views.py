@@ -3,12 +3,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message, IntegrationLog
+from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message, IntegrationLog, CustomerBlacklist
 from social_messages.services.intake_router import IntakeRouter
 from social_messages.services.outbound_message_service import OutboundMessageService
 from social_messages.services.webhook_normalizer import WebhookNormalizer
@@ -214,17 +215,50 @@ def zalo_oauth_callback(request):
     })
 
 def handle_incoming(payload):
-    logger.warning("sender_id: %s", payload.get("sender_id"))
+    sender_id = payload.get("sender_id", "")
+    platform = payload.get("platform", "")
+    logger.warning("sender_id: %s", sender_id)
+    
     conversation = get_or_create_conversation(payload)
     user_text = extract_user_text(payload)
     guard = AdminGuard()
     
-    if guard.is_admin_message(
-        platform=payload.get("platform", ""),
-        sender_id=payload.get("sender_id", ""),
-    ):  
-        
+    is_admin = guard.is_admin_message(
+        platform=platform,
+        sender_id=sender_id,
+    )
+    
+    if is_admin:
         return handle_admin_incoming(conversation, payload, user_text)
+
+    # 1. Blacklist check
+    if CustomerBlacklist.objects.filter(customer_id=sender_id, is_active=True).exists():
+        cache_key = f"notified_blacklist_{sender_id}"
+        if not cache.get(cache_key):
+            reply_text = "Tài khoản của bạn đã bị chặn do vi phạm quy định của hệ thống (Spam). Bạn không thể gửi thêm yêu cầu."
+            send_reply_to_platform(conversation, reply_text)
+            cache.set(cache_key, True, timeout=86400) # Notify once per 24 hours
+        return {"status": "ignored", "reason": "blacklisted", "conversation_id": conversation.id}
+
+    # 2. Rate Limit check
+    rate_key = f"rate_limit_{sender_id}"
+    block_key = f"temp_block_{sender_id}"
+    
+    if cache.get(block_key):
+        return {"status": "ignored", "reason": "temp_blocked", "conversation_id": conversation.id}
+
+    try:
+        current_count = cache.incr(rate_key)
+    except ValueError:
+        cache.set(rate_key, 1, timeout=60)
+        current_count = 1
+
+    if current_count > 10:
+        if current_count == 11:
+            cache.set(block_key, True, timeout=300) # Block for 5 minutes
+            reply_text = "Bạn đang gửi tin nhắn quá nhanh. Hệ thống tạm thời chặn tin nhắn của bạn trong 5 phút do nghi ngờ Spam."
+            send_reply_to_platform(conversation, reply_text)
+        return {"status": "ignored", "reason": "rate_limited", "conversation_id": conversation.id}
 
     return handle_citizen_incoming(conversation, payload, user_text)
 

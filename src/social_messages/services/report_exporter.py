@@ -10,8 +10,11 @@ from social_messages.models import IntakeSubmission, Report
 
 
 class DailyReportExporter:
-    def __init__(self, report: Report):
+    def __init__(self, report: Report, requester_user=None, is_admin=False, is_specialist=False):
         self.report = report
+        self.requester_user = requester_user
+        self.is_admin = is_admin
+        self.is_specialist = is_specialist
 
     def export(self) -> str:
         workbook = Workbook()
@@ -30,7 +33,12 @@ class DailyReportExporter:
             created_at__lte=self.report.to_time,
         ).exclude(
             message__sender_type="admin"
-        ).order_by("created_at")
+        )
+        
+        if self.is_specialist and not self.is_admin and self.requester_user:
+            submissions = submissions.filter(assignments__user=self.requester_user).distinct()
+            
+        submissions = submissions.order_by("created_at")
 
         total_submissions = submissions.count()
         total_conversations = submissions.values("conversation_id").distinct().count()
@@ -39,12 +47,12 @@ class DailyReportExporter:
         topic_counter = Counter()
         sentiment_counter = Counter()
         priority_counter = Counter()
-        status_counter = Counter()
+        processing_status_counter = Counter()
         platform_counter = Counter()
 
         for submission in submissions:
             intent_counter[self._display_intent(submission.intent)] += 1
-            status_counter[self._display_status(submission.status)] += 1
+            processing_status_counter[self._display_processing_status(submission.processing_status)] += 1
 
             if submission.topic:
                 topic_counter[submission.topic] += 1
@@ -61,7 +69,7 @@ class DailyReportExporter:
             total_submissions=total_submissions,
             total_conversations=total_conversations,
             intent_counter=intent_counter,
-            status_counter=status_counter,
+            processing_status_counter=processing_status_counter,
             platform_counter=platform_counter,
             topic_counter=topic_counter,
             sentiment_counter=sentiment_counter,
@@ -90,7 +98,7 @@ class DailyReportExporter:
         total_submissions,
         total_conversations,
         intent_counter,
-        status_counter,
+        processing_status_counter,
         platform_counter,
         topic_counter,
         sentiment_counter,
@@ -105,7 +113,7 @@ class DailyReportExporter:
         summary_sheet.append([])
 
         self._append_counter(summary_sheet, "Thống kê theo loại hồ sơ", intent_counter)
-        self._append_counter(summary_sheet, "Thống kê theo trạng thái xử lý", status_counter)
+        self._append_counter(summary_sheet, "Thống kê theo trạng thái xử lý", processing_status_counter)
         self._append_counter(summary_sheet, "Thống kê theo nền tảng", platform_counter)
         self._append_counter(summary_sheet, "Thống kê theo chủ đề", topic_counter)
         self._append_counter(summary_sheet, "Thống kê theo cảm xúc", sentiment_counter)
@@ -125,7 +133,6 @@ class DailyReportExporter:
             "Thời gian xảy ra",
             "Địa điểm xảy ra",
             "Đối tượng liên quan",
-            "Mức độ khẩn cấp",
             "Chủ đề",
             "Cảm xúc",
             "Mức ưu tiên",
@@ -151,13 +158,12 @@ class DailyReportExporter:
                 submission.event_time,
                 submission.event_location,
                 submission.related_person,
-                submission.urgency_level,
                 submission.topic,
                 submission.sentiment,
                 self._display_priority(submission.priority),
                 submission.summary,
                 submission.response_text,
-                self._display_status(submission.status),
+                self._display_processing_status(submission.processing_status),
                 submission.created_at.strftime("%d/%m/%Y %H:%M:%S"),
             ])
 
@@ -257,5 +263,15 @@ class DailyReportExporter:
             "urgent": "Khẩn cấp",
         }
         return mapping.get(priority, priority or "")
+
+    def _display_processing_status(self, status):
+        mapping = {
+            "unassigned": "Chưa phân công",
+            "pending": "Chưa xử lý",
+            "in_progress": "Đang xử lý",
+            "completed": "Đã xử lý",
+            "returned": "Trả lại",
+        }
+        return mapping.get(status, status or "")
     
     

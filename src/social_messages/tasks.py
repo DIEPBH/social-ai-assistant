@@ -5,7 +5,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 from pathlib import Path
-from social_messages.models import IntakeSubmission, Message, MessageAnalysis, Report
+from social_messages.models import IntakeSubmission, Message, MessageAnalysis, Report, UserProfile
 from social_messages.services.admin_guard import AdminGuard
 from social_messages.services.ai_service import AIAnalysisService
 from social_messages.services.command_parser import CommandParser
@@ -110,7 +110,32 @@ def generate_daily_report(report_id: int, admin_message_id: int = None):
         report.status = "processing"
         report.save(update_fields=["status"])
         logger.info("GENERATING REPORT report_id=%s", report.id)
-        exporter = DailyReportExporter(report)  
+        
+        requester_user = None
+        is_admin = False
+        is_specialist = False
+        
+        if admin_message_id:
+            try:
+                admin_msg = Message.objects.get(id=admin_message_id)
+                profile = UserProfile.objects.filter(zalo_id=admin_msg.sender_id, user__is_active=True).first()
+                if profile and profile.user:
+                    requester_user = profile.user
+                    groups = list(requester_user.groups.values_list("name", flat=True))
+                    lower_groups = [g.lower() for g in groups]
+                    if any("quản trị viên" in g for g in lower_groups):
+                        is_admin = True
+                    elif any("chuyên viên" in g for g in lower_groups):
+                        is_specialist = True
+            except Message.DoesNotExist:
+                pass
+                
+        exporter = DailyReportExporter(
+            report, 
+            requester_user=requester_user, 
+            is_admin=is_admin, 
+            is_specialist=is_specialist
+        )  
         file_path = exporter.export()
 
         if not file_path or not Path(file_path).exists():
@@ -317,28 +342,38 @@ def send_report_result_to_zalo(report_id: int, admin_message_id: int):
         access_token = channel.access_token
         user_id = admin_message.sender_id
 
-        if not settings.PUBLIC_BASE_URL:
-            raise ValueError("Missing PUBLIC_BASE_URL in settings")
-
-        if not report.file_name:
-            raise ValueError("Report file_name is empty")
-
-        relative_path = Path(report.file_path).relative_to(settings.MEDIA_ROOT)
-        download_url = f"{settings.PUBLIC_BASE_URL}/media/{relative_path.as_posix()}"
+        if not report.file_name or not report.file_path:
+            raise ValueError("Report file is missing")
 
         text = (
             f"Đã tạo xong báo cáo: {report.title}\n"
             f"Từ: {report.from_time.strftime('%d-%m-%Y %H:%M:%S')}\n"
-            f"Đến: {report.to_time.strftime('%d-%m-%Y %H:%M:%S')}\n"
-            f"Tải file: {download_url}"
+            f"Đến: {report.to_time.strftime('%d-%m-%Y %H:%M:%S')}"
         )
 
         sender = ZaloOASender()
-        zalo_result = sender.send_text_message(
+        zalo_result_text = sender.send_text_message(
             access_token=access_token,
             user_id=user_id,
             text=text,
         )
+
+        try:
+            file_token = sender.upload_file(access_token, report.file_path)
+            zalo_result_file = sender.send_file_message(
+                access_token=access_token,
+                user_id=user_id,
+                file_token=file_token
+            )
+            zalo_result = {"text": zalo_result_text, "file": zalo_result_file}
+        except Exception as e:
+            logger.error("Failed to send file directly to Zalo: %s", e)
+            if settings.PUBLIC_BASE_URL:
+                relative_path = Path(report.file_path).relative_to(settings.MEDIA_ROOT)
+                download_url = f"{settings.PUBLIC_BASE_URL}/media/{relative_path.as_posix()}"
+                fallback_text = f"Không thể gửi file trực tiếp. Tải file: {download_url}"
+                sender.send_text_message(access_token, user_id, fallback_text)
+            zalo_result = {"text": zalo_result_text, "error": str(e)}
 
         report.note = (report.note or "") + f"\nĐã gửi kết quả về Zalo cho user {user_id}"
         report.save(update_fields=["note"])
@@ -704,7 +739,7 @@ def cleanup_integration_logs():
 
 @shared_task
 def send_daily_24h_summary_report():
-    from social_messages.models import IntakeSubmission, Channel
+    from social_messages.models import IntakeSubmission, Channel, UserProfile, IntakeSubmissionAssignment
     from social_messages.services.zalo_sender import ZaloOASender
     from django.conf import settings
     from django.utils import timezone
@@ -724,8 +759,14 @@ def send_daily_24h_summary_report():
     low_count = qs.filter(priority__iexact='low').count()
     unknown_count = total - (high_count + med_count + low_count)
     
-    processed_count = qs.filter(status__in=["analyzed", "responded", "rejected"]).count()
-    unprocessed_count = qs.filter(status__in=["received", "validated"]).count()
+    # 24h Processing status for Admin
+    unassigned_today = qs.filter(processing_status='unassigned').count()
+    pending_today = qs.filter(processing_status='pending').count()
+    in_progress_today = qs.filter(processing_status='in_progress').count()
+    completed_today = qs.filter(processing_status='completed').count()
+    returned_today = qs.filter(processing_status='returned').count()
+    
+    total_unassigned = IntakeSubmission.objects.filter(processing_status='unassigned').count()
     
     # Get timezone from settings to format correctly
     from zoneinfo import ZoneInfo
@@ -751,7 +792,17 @@ def send_daily_24h_summary_report():
             local_file_name = files[0]
             banner_url = f"{public_url}{settings.MEDIA_URL}Baner%20Admin/{quote(local_file_name)}"
     
-    text = f"""📊 BÁO CÁO TỔNG QUAN 24H QUA 📊
+    zalo_channel = Channel.objects.filter(platform='zalo', is_active=True).first()
+    if not zalo_channel or not zalo_channel.access_token:
+        logger.error("Cannot send daily report: No active Zalo channel with access token")
+        return {"status": "error", "reason": "no_zalo_channel"}
+
+    sender = ZaloOASender()
+    
+    # ==========================
+    # 1. ADMIN REPORT
+    # ==========================
+    admin_text = f"""📊 BÁO CÁO TỔNG QUAN 24H QUA 📊
 (Từ {start_str} đến {end_str})
 
 📥 TỔNG SỐ HỒ SƠ: {total}
@@ -764,35 +815,105 @@ def send_daily_24h_summary_report():
 - Thấp: {low_count}
 - Khác: {unknown_count}
 
-⚙️ TIẾN ĐỘ XỬ LÝ:
-- Đã xử lý (Gồm đã phân tích/phản hồi/từ chối): {processed_count}
-- Chưa xử lý (Mới/Hợp lệ): {unprocessed_count}"""
+⚙️ TRẠNG THÁI XỬ LÝ (hồ sơ mới trong ngày):
+- Chưa phân công: {unassigned_today}
+- Chưa xử lý: {pending_today}
+- Đang xử lý: {in_progress_today}
+- Đã xử lý: {completed_today}
+- Trả lại: {returned_today}
 
-    zalo_channel = Channel.objects.filter(platform='zalo', is_active=True).first()
-    if not zalo_channel or not zalo_channel.access_token:
-        logger.error("Cannot send daily report: No active Zalo channel with access token")
-        return {"status": "error", "reason": "no_zalo_channel"}
+📌 Tổng số hồ sơ chưa phân công: {total_unassigned}"""
 
-    sender = ZaloOASender()
-    from social_messages.models import UserProfile
-    admin_ids = list(
-        UserProfile.objects.filter(user__is_active=True)
-        .exclude(zalo_id="")
-        .values_list("zalo_id", flat=True)
-    )
-    sent_count = 0
-    for admin_id in admin_ids:
-        if not str(admin_id).strip():
+    admin_profiles = UserProfile.objects.filter(
+        user__groups__name='Quản trị viên',
+        user__is_active=True
+    ).exclude(zalo_id="")
+    
+    sent_admins_count = 0
+    for profile in admin_profiles:
+        zalo_id = str(profile.zalo_id).strip()
+        if not zalo_id:
             continue
         try:
             sender.send_media_template_message(
                 access_token=zalo_channel.access_token,
-                user_id=str(admin_id).strip(),
-                text=text,
+                user_id=zalo_id,
+                text=admin_text,
                 image_url=banner_url
             )
-            sent_count += 1
+            sent_admins_count += 1
         except Exception as e:
-            logger.exception(f"Failed to send daily summary to admin {admin_id}: {e}")
+            logger.exception(f"Failed to send daily summary to admin {profile.user.username}: {e}")
+
+    # ==========================
+    # 2. SPECIALIST REPORT
+    # ==========================
+    specialist_profiles = UserProfile.objects.filter(
+        user__groups__name='Chuyên viên',
+        user__is_active=True
+    ).exclude(zalo_id="")
+    
+    sent_specialists_count = 0
+    for profile in specialist_profiles:
+        zalo_id = str(profile.zalo_id).strip()
+        if not zalo_id:
+            continue
             
-    return {"status": "success", "sent_count": sent_count, "total_admins": len(admin_ids)}
+        sp_user = profile.user
+        display_name = f"{sp_user.last_name} {sp_user.first_name}".strip() or sp_user.username
+        
+        assignments_24h = IntakeSubmissionAssignment.objects.filter(
+            user=sp_user,
+            created_at__gte=start_time,
+            created_at__lt=end_time
+        )
+        
+        total_assigned_24h = assignments_24h.count()
+        role_main = assignments_24h.filter(role='main').count()
+        role_co = assignments_24h.filter(role='co_handler').count()
+        
+        status_pending = assignments_24h.filter(status='pending').count()
+        status_in_progress = assignments_24h.filter(status='in_progress').count()
+        status_completed = assignments_24h.filter(status='completed').count()
+        status_returned = assignments_24h.filter(status='returned').count()
+        
+        all_pending = IntakeSubmissionAssignment.objects.filter(user=sp_user, status='pending').count()
+        all_in_progress = IntakeSubmissionAssignment.objects.filter(user=sp_user, status='in_progress').count()
+        
+        specialist_text = f"""📊 BÁO CÁO CÔNG VIỆC 24H QUA 📊
+(Từ {start_str} đến {end_str})
+
+👤 Chuyên viên: {display_name}
+
+📥 HỒ SƠ ĐƯỢC GIAO TRONG 24H: {total_assigned_24h}
+- Theo vai trò:
+  + Tổng số hồ sơ được giao xử lý chính: {role_main}
+  + Tổng số hồ sơ được giao phối hợp: {role_co}
+- Theo trạng thái:
+  + Chưa xử lý: {status_pending}
+  + Đang xử lý: {status_in_progress}
+  + Đã xử lý: {status_completed}
+  + Trả lại: {status_returned}
+
+⚙️ TỔNG SỐ HỒ SƠ CHƯA HOÀN THÀNH:
+- Chưa xử lý: {all_pending}
+- Đang xử lý: {all_in_progress}"""
+
+        try:
+            sender.send_media_template_message(
+                access_token=zalo_channel.access_token,
+                user_id=zalo_id,
+                text=specialist_text,
+                image_url=banner_url
+            )
+            sent_specialists_count += 1
+        except Exception as e:
+            logger.exception(f"Failed to send daily summary to specialist {sp_user.username}: {e}")
+
+    return {
+        "status": "success",
+        "sent_admins": sent_admins_count,
+        "total_admins": admin_profiles.count(),
+        "sent_specialists": sent_specialists_count,
+        "total_specialists": specialist_profiles.count(),
+    }
