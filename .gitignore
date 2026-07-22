@@ -13,6 +13,7 @@ staticfiles/
 venv/
 .venv/
 env/
+env_vulture/
 
 # Environment secrets
 .env
@@ -40,4 +41,8 @@ reports/
 exports/
 tmp/
 
-openclaw_config/
+# Project specifics & test files
+backups/
+fb_test.json
+zalo_verifier*.html
+.gemini/
