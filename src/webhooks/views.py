@@ -304,6 +304,13 @@ def handle_citizen_incoming(conversation, payload, user_text):
         },
     )
 
+    if not created:
+        return {
+            "status": "ignored",
+            "reason": "duplicate_message",
+            "conversation_id": conversation.id,
+        }
+
     router = IntakeRouter()
     route_result = router.route(conversation=conversation, user_text=user_text)
 

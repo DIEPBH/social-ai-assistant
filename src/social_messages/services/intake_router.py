@@ -3,9 +3,10 @@ import unicodedata
 
 from django.utils import timezone
 
-from social_messages.models import IntakeCategory
+from social_messages.models import IntakeCategory, SystemConfig
 from social_messages.services.intake_template_service import IntakeTemplateService
 from social_messages.services.message_intake_filter import MessageIntakeFilter
+from social_messages.services.gemini_analyzer import GeminiAnalyzer
 
 
 class IntakeRouter:
@@ -166,16 +167,39 @@ class IntakeRouter:
 
                 conversation.save(update_fields=["form_retry_count", "updated_at"])
 
-                missing = ", ".join(result.missing_fields) if result.missing_fields else "không xác định"
-                template_text = self.template_service.get_template(category)
-
-                return {
-                    "action": "reply_only",
-                    "reply_text": (
+                use_ai = False
+                try:
+                    config = SystemConfig.objects.filter(key="USE_AI_INTAKE", is_active=True).first()
+                    if config:
+                        use_ai = True
+                except Exception:
+                    pass
+                
+                reply_text = ""
+                if use_ai and result.missing_fields:
+                    try:
+                        analyzer = GeminiAnalyzer()
+                        reply_text = analyzer.generate_followup_question(
+                            user_text=accumulated_text, 
+                            missing_fields=result.missing_fields, 
+                            category_name=category.name
+                        )
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).error("AI Followup failed, falling back to manual: %s", e)
+                
+                if not reply_text:
+                    missing = ", ".join(result.missing_fields) if result.missing_fields else "không xác định"
+                    template_text = self.template_service.get_template(category)
+                    reply_text = (
                         "Nội dung chưa đúng mẫu hoặc còn thiếu thông tin bắt buộc.\n"
                         f"Các mục còn thiếu/chưa hợp lệ: {missing}\n\n"
                         f"{template_text}"
-                    ),
+                    )
+
+                return {
+                    "action": "reply_only",
+                    "reply_text": reply_text,
                     "buttons": [
                         {"title": "Sao chép mẫu", "type": "oa.query.hide", "payload": "#copy_template"},
                         {"title": "Hoàn tất khai báo", "type": "oa.query.show", "payload": "Xong"},
@@ -183,13 +207,43 @@ class IntakeRouter:
                     ],
                 }
 
+            use_ai = False
+            try:
+                config = SystemConfig.objects.filter(key="USE_AI_INTAKE", is_active=True).first()
+                if config:
+                    use_ai = True
+            except Exception:
+                pass
+
+            if use_ai and result.missing_fields:
+                import time
+                from django.core.cache import cache
+                cache_key = f"last_ai_reply_{conversation.id}"
+                last_reply = cache.get(cache_key)
+                now = time.time()
+                
+                if not last_reply or (now - last_reply) > 5:
+                    try:
+                        analyzer = GeminiAnalyzer()
+                        reply_text = analyzer.generate_followup_question(
+                            user_text=accumulated_text, 
+                            missing_fields=result.missing_fields, 
+                            category_name=category.name
+                        )
+                        cache.set(cache_key, now, timeout=60)
+                        return {
+                            "action": "reply_only",
+                            "reply_text": reply_text,
+                            "buttons": [
+                                {"title": "Hoàn tất khai báo", "type": "oa.query.show", "payload": "Xong"},
+                                {"title": "Hủy khai báo", "type": "oa.query.show", "payload": "Huỷ"}
+                            ],
+                        }
+                    except Exception:
+                        pass
+                        
             return {
-                "action": "reply_only",
-                "reply_text": "Hệ thống đã nhận thông tin. Anh/chị có thể tiếp tục gửi thêm, hoặc nhấn 'Hoàn tất khai báo' nếu đã xong, 'Hủy khai báo' để quay lại.",
-                "buttons": [
-                    {"title": "Hoàn tất khai báo", "type": "oa.query.show", "payload": "Xong"},
-                    {"title": "Hủy khai báo", "type": "oa.query.show", "payload": "Huỷ"}
-                ],
+                "action": "ignore",
             }
 
         return self._reset_to_menu(conversation)

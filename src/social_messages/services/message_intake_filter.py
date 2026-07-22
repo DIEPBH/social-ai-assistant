@@ -4,7 +4,8 @@ import unicodedata
 
 from django.db.models import Q
 
-from social_messages.models import IntakeCategory, IntakeTemplate, IntakeValidationRule
+from social_messages.models import IntakeCategory, IntakeTemplate, IntakeValidationRule, SystemConfig
+from social_messages.services.gemini_analyzer import GeminiAnalyzer
 
 
 @dataclass
@@ -86,6 +87,33 @@ class MessageIntakeFilter:
         mapped_data = {}
         extra_data = {}
         labels = {}
+
+        use_ai = False
+        try:
+            config = SystemConfig.objects.filter(key="USE_AI_INTAKE", is_active=True).first()
+            if config:
+                use_ai = True
+        except Exception:
+            pass
+            
+        if use_ai:
+            try:
+                analyzer = GeminiAnalyzer()
+                ai_extracted = analyzer.extract_entities(text, fields)
+                # Map extracted JSON back to extracted, mapped_data, extra_data, labels
+                for field in fields:
+                    value = ai_extracted.get(field.field_key, "").strip()
+                    if value:
+                        extracted[field.field_key] = value
+                        labels[field.field_key] = field.label
+                        if field.target_field in self.CORE_TARGET_FIELDS:
+                            mapped_data[field.target_field] = value
+                        else:
+                            extra_data[field.field_key] = value
+                return extracted, mapped_data, extra_data, labels
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error("AI Extraction failed, falling back to manual: %s", e)
 
         for line in lines:
             if ":" not in line:

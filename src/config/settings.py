@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "social_messages",
     "webhooks",
+    "django_recaptcha",
 ]
 
 MIDDLEWARE = [
@@ -49,7 +50,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -96,6 +97,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 #media files (user uploads)
@@ -142,6 +144,11 @@ LOGGING = {
         "level": "INFO",  # 👈 Quan trọng
     },
 }
+
+# ReCAPTCHA V3 Settings
+RECAPTCHA_PUBLIC_KEY = os.getenv("RECAPTCHA_PUBLIC_KEY", "dummy-public-key")
+RECAPTCHA_PRIVATE_KEY = os.getenv("RECAPTCHA_PRIVATE_KEY", "dummy-private-key")
+RECAPTCHA_REQUIRED_SCORE = 0.5
 
 # Cấu hình Jazzmin
 JAZZMIN_SETTINGS = {
@@ -205,23 +212,23 @@ JAZZMIN_UI_TWEAKS = {
     "footer_small_text": False,
     "body_small_text": False,
     "brand_small_text": False,
-    "brand_colour": "navbar-primary",
-    "accent": "accent-primary",
-    "navbar": "navbar-white navbar-light",
+    "brand_colour": "navbar-dark",
+    "accent": "accent-success",
+    "navbar": "navbar-dark",
     "no_navbar_border": False,
     "navbar_fixed": True,
     "layout_boxed": False,
     "footer_fixed": False,
     "sidebar_fixed": True,
-    "sidebar": "sidebar-light-primary",
+    "sidebar": "sidebar-dark-success",
     "sidebar_nav_small_text": False,
     "sidebar_disable_expand": False,
     "sidebar_nav_child_indent": True,
     "sidebar_nav_compact_style": False,
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style": False,
-    "theme": "lumen",
-    "dark_mode_theme": None,
+    "theme": "darkly",
+    "dark_mode_theme": "darkly",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",
@@ -249,3 +256,9 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=8, minute=0),
     },
 }
+
+# Thời gian hết hạn của session tính bằng giây (Ví dụ ở đây là 3600 giây = 1 giờ)
+SESSION_COOKIE_AGE = 3600
+
+# (Tùy chọn) Nếu bạn muốn session tự động bị hủy ngay khi người dùng đóng trình duyệt:
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True

@@ -22,6 +22,7 @@ from .models import (
     KeywordRule,
     Message,
     Report,
+    SystemConfig,
 )
 
 
@@ -48,6 +49,13 @@ class IntakeTemplateFieldInline(admin.TabularInline):
         "help_text",
         "is_active",
     )
+
+@admin.register(SystemConfig)
+class SystemConfigAdmin(admin.ModelAdmin):
+    list_display = ("id", "key", "value", "is_active", "updated_at")
+    search_fields = ("key", "value", "description")
+    list_filter = ("is_active",)
+    ordering = ("key",)
 
 @admin.register(IntegrationLog)
 class IntegrationLogAdmin(admin.ModelAdmin):

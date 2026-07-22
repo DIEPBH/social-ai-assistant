@@ -736,3 +736,19 @@ def auto_delete_report_file_on_delete(sender, instance, **kwargs):
                 os.remove(instance.file_path)
         except Exception:
             pass
+
+
+class SystemConfig(models.Model):
+    key = models.CharField(max_length=100, unique=True, verbose_name="Mã cấu hình")
+    value = models.TextField(blank=True, default="", verbose_name="Giá trị")
+    is_active = models.BooleanField(default=True, verbose_name="Bật/Tắt")
+    description = models.TextField(blank=True, default="", verbose_name="Mô tả")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
+
+    class Meta:
+        db_table = "system_configs"
+        verbose_name = "Cấu hình hệ thống"
+        verbose_name_plural = "Cấu hình hệ thống"
+
+    def __str__(self):
+        return f"{self.key} - {'BẬT' if self.is_active else 'TẮT'}"

@@ -1,0 +1,91 @@
+/* custom.css */
+body {
+    background-image: url('../img/bg_green.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Glassmorphism for the main wrappers */
+.wrapper, .content-wrapper, .main-footer, .main-header {
+    background: transparent !important;
+}
+
+/* Glassmorphism for the navbar */
+.main-header {
+    background: rgba(10, 20, 15, 0.7) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 230, 118, 0.2) !important;
+}
+
+/* Glassmorphism for sidebar */
+.main-sidebar {
+    background: rgba(10, 20, 15, 0.8) !important;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-right: 1px solid rgba(0, 230, 118, 0.2);
+}
+
+/* Glassmorphism for cards and widgets */
+.card, .info-box, .small-box {
+    background: rgba(10, 20, 15, 0.6) !important;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    color: #e8f5e9 !important;
+}
+
+.card-header {
+    background-color: rgba(0, 230, 118, 0.1) !important;
+    border-bottom: 1px solid rgba(0, 230, 118, 0.2) !important;
+}
+
+/* Inputs and Forms */
+.form-control, .select2-selection {
+    background: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(0, 230, 118, 0.3) !important;
+    color: #e8f5e9 !important;
+}
+
+.form-control:focus {
+    border-color: #00e676 !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+}
+
+/* Tables */
+.table {
+    color: #e8f5e9 !important;
+}
+.table td, .table th {
+    border-top: 1px solid rgba(0, 230, 118, 0.2) !important;
+}
+.table thead th {
+    border-bottom: 2px solid rgba(0, 230, 118, 0.3) !important;
+}
+
+/* Primary buttons */
+.btn-primary, .btn-info {
+    background: linear-gradient(90deg, #00a152, #00e676) !important;
+    border: none !important;
+    color: #000 !important;
+    box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3) !important;
+}
+.btn-primary:hover, .btn-info:hover {
+    box-shadow: 0 6px 20px rgba(0, 230, 118, 0.5) !important;
+}
+
+/* Links and Accents */
+a {
+    color: #00e676;
+}
+a:hover {
+    color: #69f0ae;
+}
+
+/* Override Jazzmin sidebar active color if needed */
+.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+    background-color: rgba(0, 230, 118, 0.3) !important;
+    color: #fff !important;
+}
