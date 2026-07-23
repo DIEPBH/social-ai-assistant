@@ -273,6 +273,7 @@ def handle_admin_incoming(conversation, payload, user_text):
             "sender_type": payload.get("sender_type", "admin"),
             "message_type": payload.get("message_type", "text"),
             "content": user_text,
+            "attachments": payload.get("attachments", []),
             "sent_at": sent_at,
             "raw_payload": payload.get("raw_payload", payload),
         },
@@ -299,6 +300,7 @@ def handle_citizen_incoming(conversation, payload, user_text):
             "sender_type": "admin" if AdminGuard().is_zalo_admin(payload.get("sender_id", "")) else "customer",
             "message_type": payload.get("message_type", "text"),
             "content": user_text,
+            "attachments": payload.get("attachments", []),
             "sent_at": sent_at,
             "raw_payload": payload.get("raw_payload", payload),
         },
@@ -308,6 +310,13 @@ def handle_citizen_incoming(conversation, payload, user_text):
         return {
             "status": "ignored",
             "reason": "duplicate_message",
+            "conversation_id": conversation.id,
+        }
+
+    if payload.get("message_type") in ["image", "video", "file", "audio"]:
+        return {
+            "status": "saved_no_reply",
+            "reason": "media_message_no_auto_reply",
             "conversation_id": conversation.id,
         }
 
@@ -441,6 +450,10 @@ def get_or_create_conversation(data):
     if updated_fields:
         updated_fields.append("updated_at")
         conversation.save(update_fields=updated_fields)
+
+    if platform == "zalo" and not conversation.customer_name:
+        from social_messages.tasks import fetch_zalo_user_profile
+        fetch_zalo_user_profile.delay(conversation.id)
 
     return conversation
 

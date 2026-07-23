@@ -622,6 +622,35 @@ def refresh_zalo_channel_token(channel_id: int):
 
 
 @shared_task
+def fetch_zalo_user_profile(conversation_id: int):
+    from social_messages.models import Conversation
+    from social_messages.services.zalo_sender import ZaloOASender
+    
+    try:
+        conversation = Conversation.objects.select_related("channel").get(id=conversation_id)
+        if conversation.channel.platform != "zalo" or conversation.customer_name:
+            return {"status": "ignored"}
+            
+        access_token = conversation.channel.access_token or getattr(settings, "ZALO_OA_ACCESS_TOKEN", "")
+        if not access_token:
+            return {"status": "error", "reason": "no_access_token"}
+            
+        sender = ZaloOASender()
+        profile_data = sender.get_user_profile(access_token, conversation.customer_id)
+        
+        if profile_data.get("error") == 0 and "data" in profile_data:
+            display_name = profile_data["data"].get("display_name")
+            if display_name:
+                conversation.customer_name = display_name
+                conversation.save(update_fields=["customer_name", "updated_at"])
+                return {"status": "success", "display_name": display_name}
+                
+        return {"status": "failed", "response": profile_data}
+    except Exception as e:
+        logger.exception("fetch_zalo_user_profile failed")
+        return {"status": "error", "error": str(e)}
+
+@shared_task
 def refresh_all_zalo_tokens_if_needed():
     refresher = ZaloTokenRefresher()
 

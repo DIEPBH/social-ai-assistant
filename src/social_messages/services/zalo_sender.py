@@ -158,6 +158,55 @@ class ZaloOASender:
 
         return self._send_payload(access_token, payload)
 
+    def get_user_profile(self, access_token: str, user_id: str) -> Dict[str, Any]:
+        if not access_token:
+            raise ValueError("Missing Zalo OA access token")
+        if not user_id:
+            raise ValueError("Missing Zalo user_id")
+
+        url = "https://openapi.zalo.me/v2.0/oa/getprofile"
+        headers = {
+            "access_token": access_token
+        }
+        params = {
+            "data": f'{{"user_id":"{user_id}"}}'
+        }
+        
+        import time
+        from social_messages.models import IntegrationLog
+        
+        start_time = time.time()
+        error_msg = ""
+        response = None
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            processing_time_ms = (time.time() - start_time) * 1000
+            resp_json = {}
+            if response:
+                try:
+                    resp_json = response.json()
+                except Exception:
+                    resp_json = {"raw_text": response.text}
+            
+            IntegrationLog.objects.create(
+                system="zalo_api",
+                direction="outbound",
+                endpoint=url,
+                method="GET",
+                status_code=response.status_code if response else None,
+                request_payload=params,
+                response_payload=resp_json,
+                error_message=error_msg,
+                processing_time_ms=processing_time_ms
+            )
+
+        return resp_json
+
     def _send_payload(self, access_token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         headers = {
             "access_token": access_token,

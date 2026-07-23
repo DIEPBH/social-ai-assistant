@@ -243,11 +243,11 @@ class MessageAdmin(admin.ModelAdmin):
         "message_type",
         "short_content",
         "sent_at",
-        "sender_id",
+        "has_attachments",
     )
     search_fields = ("platform_message_id", "sender_id", "content")
     list_filter = ("sender_type", "message_type", "conversation__channel")
-    readonly_fields = ("platform_message_id", "raw_payload", "created_at")
+    readonly_fields = ("platform_message_id", "raw_payload", "attachments_view", "created_at")
 
     @admin.display(description="Người gửi")
     def sender_type_badge(self, obj):
@@ -263,6 +263,32 @@ class MessageAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         content = getattr(obj, "content", "") or ""
         return content[:80] + "..." if len(content) > 80 else content
+
+    @admin.display(description="Có đính kèm", boolean=True)
+    def has_attachments(self, obj):
+        return bool(obj.attachments)
+
+    @admin.display(description="File đính kèm")
+    def attachments_view(self, obj):
+        if not obj.attachments:
+            return "-"
+        
+        html = []
+        for att in obj.attachments:
+            url = att.get("url")
+            att_type = att.get("type", "unknown")
+            thumb = att.get("thumbnail")
+            
+            if not url:
+                continue
+                
+            if att_type == "image":
+                img_src = thumb or url
+                html.append(f'<a href="{url}" target="_blank"><img src="{img_src}" style="max-width: 150px; max-height: 150px; margin: 5px; border: 1px solid #ccc; border-radius: 4px;" /></a>')
+            else:
+                html.append(f'<div style="margin: 5px;"><a href="{url}" target="_blank" style="padding: 5px 10px; background: #007bff; color: white; text-decoration: none; border-radius: 3px;">Xem/Tải {att_type}</a></div>')
+                
+        return format_html("".join(html))
 
 
 @admin.register(Report)

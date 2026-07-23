@@ -27,6 +27,30 @@ class WebhookNormalizer:
         if not msg_id or not user_id:
             return None
 
+        message_type = "text"
+        event_name = payload.get("event_name", "")
+        if event_name == "user_send_image":
+            message_type = "image"
+        elif event_name == "user_send_video":
+            message_type = "video"
+        elif event_name == "user_send_file":
+            message_type = "file"
+        elif event_name == "user_send_audio":
+            message_type = "audio"
+
+        raw_attachments = message.get("attachments", [])
+        normalized_attachments = []
+        for att in raw_attachments:
+            att_type = att.get("type")
+            att_payload = att.get("payload", {})
+            normalized_attachments.append({
+                "type": att_type,
+                "url": att_payload.get("url"),
+                "thumbnail": att_payload.get("thumbnail"),
+            })
+            if message_type == "text" and att_type in ["image", "video", "file", "audio"]:
+                message_type = att_type
+
         return {
             "platform": "zalo",
             "channel_external_id": str(oa_id or "zalo_oa_main"),
@@ -34,10 +58,11 @@ class WebhookNormalizer:
             "customer_name": payload.get("display_name") or payload.get("user_name"),
             "platform_message_id": str(msg_id),
             "sender_type": sender_type,
-            "message_type": "text",
+            "message_type": message_type,
             "content": text,
             "raw_payload": payload,
             "sender_id": str(sender_id),
+            "attachments": normalized_attachments,
         }
 
     def normalize_facebook_message(self, payload: Dict[str, Any]) -> list[Dict[str, Any]]:

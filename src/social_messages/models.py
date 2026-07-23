@@ -368,6 +368,7 @@ class Message(models.Model):
     sender_type = models.CharField(max_length=20, choices=SENDER_TYPE_CHOICES, verbose_name="Loại người gửi")
     message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default="text", verbose_name="Loại tin nhắn")
     content = models.TextField(blank=True, null=True, verbose_name="Nội dung")
+    attachments = models.JSONField(default=list, blank=True, verbose_name="Đính kèm")
     sent_at = models.DateTimeField(verbose_name="Thời gian gửi")
     raw_payload = models.JSONField(default=dict, blank=True, verbose_name="Dữ liệu thô")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
