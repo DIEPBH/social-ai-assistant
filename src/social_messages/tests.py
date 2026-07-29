@@ -56,7 +56,9 @@ class IntakeRouterMultiMessageTest(TestCase):
         )
         res1 = self.router.route(self.conversation, "Xin chào, tôi muốn báo cáo.")
         self.assertEqual(res1["action"], "reply_only")
+        self.assertIn("Các mục còn thiếu", res1["reply_text"])
         
+        # Tin nhắn nhắn ngay lập tức (< 5s) sẽ bị throttle -> ignore
         Message.objects.create(
             platform_message_id="msg_2",
             conversation=self.conversation,
@@ -67,7 +69,23 @@ class IntakeRouterMultiMessageTest(TestCase):
             sent_at=timezone.now()
         )
         res2 = self.router.route(self.conversation, "Hôm qua có trộm.")
-        self.assertEqual(res2["action"], "reply_only")
+        self.assertEqual(res2["action"], "ignore")
+
+        # Giả lập > 5s trôi qua (xóa cache)
+        from django.core.cache import cache
+        cache.clear()
+
+        Message.objects.create(
+            platform_message_id="msg_2_2",
+            conversation=self.conversation,
+            sender_id="cust_123",
+            sender_type="customer",
+            message_type="text",
+            content="Thêm thông tin.",
+            sent_at=timezone.now()
+        )
+        res2_2 = self.router.route(self.conversation, "Thêm thông tin.")
+        self.assertEqual(res2_2["action"], "reply_only")
 
         # Send 'xong' while still missing 'Nội dung:' mapping
         Message.objects.create(
@@ -98,3 +116,17 @@ class IntakeRouterMultiMessageTest(TestCase):
         
         cleaned_content = res4["cleaned_data"]["mapped_data"]["content"]
         self.assertIn("Hôm qua có trộm", cleaned_content)
+
+    def test_single_message_full_data_saves_and_processes(self):
+        Message.objects.create(
+            platform_message_id="msg_single",
+            conversation=self.conversation,
+            sender_id="cust_123",
+            sender_type="customer",
+            message_type="text",
+            content="Nội dung: Trộm đột nhập ban đêm.",
+            sent_at=timezone.now()
+        )
+        res = self.router.route(self.conversation, "Nội dung: Trộm đột nhập ban đêm.")
+        self.assertEqual(res["action"], "save_and_process")
+        self.assertIn("Trộm đột nhập ban đêm", res["cleaned_data"]["mapped_data"]["content"])

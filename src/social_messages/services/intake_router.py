@@ -215,12 +215,14 @@ class IntakeRouter:
             except Exception:
                 pass
 
+            import time
+            from django.core.cache import cache
+
+            now = time.time()
+
             if use_ai and result.missing_fields:
-                import time
-                from django.core.cache import cache
                 cache_key = f"last_ai_reply_{conversation.id}"
                 last_reply = cache.get(cache_key)
-                now = time.time()
                 
                 if not last_reply or (now - last_reply) > 5:
                     try:
@@ -241,7 +243,31 @@ class IntakeRouter:
                         }
                     except Exception:
                         pass
-                        
+                return {
+                    "action": "ignore",
+                }
+
+            cache_key = f"last_manual_notice_{conversation.id}"
+            last_notice = cache.get(cache_key)
+
+            if not last_notice or (now - last_notice) > 5:
+                cache.set(cache_key, now, timeout=60)
+                missing = ", ".join(result.missing_fields) if result.missing_fields else "Các trường theo mẫu"
+                return {
+                    "action": "reply_only",
+                    "reply_text": (
+                        "Hệ thống đang ghi nhận thông tin khai báo.\n"
+                        f"Các mục còn thiếu/chưa hợp lệ: {missing}.\n\n"
+                        "Anh/chị vui lòng nhập bổ sung, chọn 'Sao chép mẫu' để lấy mẫu chuẩn, "
+                        "hoặc nhấn 'Hoàn tất khai báo' / 'Hủy khai báo'."
+                    ),
+                    "buttons": [
+                        {"title": "Sao chép mẫu", "type": "oa.query.hide", "payload": "#copy_template"},
+                        {"title": "Hoàn tất khai báo", "type": "oa.query.show", "payload": "Xong"},
+                        {"title": "Hủy khai báo", "type": "oa.query.show", "payload": "Huỷ"}
+                    ],
+                }
+
             return {
                 "action": "ignore",
             }
