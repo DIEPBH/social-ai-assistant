@@ -15,12 +15,17 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR.parent / "env" / ".env")
+env_path = BASE_DIR.parent / "env" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+elif (BASE_DIR.parent / ".env").exists():
+    load_dotenv(BASE_DIR.parent / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-fallback-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS", "*")
+ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()]
 
 INSTALLED_APPS = [
     "jazzmin",
@@ -122,9 +127,8 @@ ZALO_APP_ID = os.getenv("ZALO_APP_ID", "")
 ZALO_APP_SECRET = os.getenv("ZALO_APP_SECRET", "")
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-CSRF_TRUSTED_ORIGINS = [
-    "https://webhook.socialai.id.vn",
-]
+csrf_origins_env = os.getenv("CSRF_TRUSTED_ORIGINS", "https://webhook.socialai.id.vn,http://localhost:8000")
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_env.split(",") if origin.strip()]
 
 
 

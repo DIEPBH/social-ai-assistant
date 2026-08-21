@@ -1,0 +1,60 @@
+services:
+  web:
+    build: .
+    container_name: social_ai_web_dev
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./src:/app
+      - ./docker:/app/docker
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./env/.env
+    depends_on:
+      - db
+      - redis
+
+  celery_worker:
+    build: .
+    container_name: social_ai_celery_worker_dev
+    command: celery -A config worker -l info
+    volumes:
+      - ./src:/app
+    env_file:
+      - ./env/.env
+    depends_on:
+      - db
+      - redis
+
+  celery_beat:
+    build: .
+    container_name: social_ai_celery_beat_dev
+    command: celery -A config beat -l info
+    volumes:
+      - ./src:/app
+    env_file:
+      - ./env/.env
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:15
+    container_name: social_ai_db_dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    env_file:
+      - ./env/.env
+
+  redis:
+    image: redis:7
+    container_name: social_ai_redis_dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_dev_data:

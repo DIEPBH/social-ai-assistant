@@ -19,4 +19,19 @@ Một hệ thống trợ lý AI hỗ trợ tự động xử lý tin nhắn từ
 *   **Database**: PostgreSQL
 *   **Background Tasks**: Celery, Redis
 *   **AI Integration**: Google Gemini API
-*   **Infrastructure**: Docker, Docker Compose
+*   **Infrastructure**: Docker, Docker Compose, Nginx, Gunicorn
+
+## 📦 Đóng gói & Triển khai
+
+Dự án đã được đóng gói hoàn chỉnh bằng Docker Container.
+
+### Triển khai Nhanh (Production)
+```bash
+# 1. Tạo tệp cấu hình từ tệp mẫu
+cp .env.example env/.env
+
+# 2. Khởi chạy hệ thống 1-click
+./deploy.sh
+```
+
+Chi tiết hướng dẫn đóng gói image, triển khai trên nhiều máy chủ, cấu hình SSL và sao lưu dữ liệu xem tại [DEPLOYMENT.md](file:///opt/social_ai_assistant/DEPLOYMENT.md).
