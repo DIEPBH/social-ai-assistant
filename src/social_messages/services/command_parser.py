@@ -1,4 +1,5 @@
 import re
+from typing import Optional
 import unicodedata
 from datetime import datetime, time, timedelta
 
@@ -22,7 +23,14 @@ class CommandParser:
         for pattern in patterns:
             match = self._match_pattern(pattern, content, normalized)
             if match:
-                return self._build_command_result(pattern.command, match, content)
+                res = self._build_command_result(pattern.command, match, content, normalized)
+                if res.get("is_command"):
+                    return res
+
+        # Fallback các lệnh hồ sơ mặc định nếu chưa cấu hình DB pattern
+        builtin_result = self._check_builtin_submission_commands(content, normalized)
+        if builtin_result.get("is_command"):
+            return builtin_result
 
         return self._not_command()
 
@@ -40,6 +48,8 @@ class CommandParser:
 
         if not suggestions:
             suggestions = [
+                "danh sách hồ sơ",
+                "xem hồ sơ 114",
                 "tình hình hôm nay",
                 "báo cáo hôm nay",
                 "hệ thống có lỗi không",
@@ -48,6 +58,138 @@ class CommandParser:
         return "Tôi chưa hiểu lệnh quản trị này.\nAnh/chị có thể thử:\n" + "\n".join(
             f"- {item}" for item in suggestions
         )
+
+    def _check_builtin_submission_commands(self, original_content: str, normalized_content: str) -> dict:
+        # 1. Lệnh xem chi tiết hồ sơ: xem ho so 114, ho so 114, hs 114, chi tiet ho so 114, hs#114
+        detail_match = re.search(
+            r"^(?:xem\s+)?(?:ho\s*so|chi\s*tiet\s*ho\s*so|hs)\s*#?(?P<submission_id>\d+)$",
+            normalized_content,
+        )
+        if detail_match:
+            try:
+                sub_id = int(detail_match.group("submission_id"))
+                return {
+                    "is_command": True,
+                    "command_type": "submission_detail",
+                    "submission_id": sub_id,
+                    "source": "builtin",
+                }
+            except (ValueError, IndexError):
+                pass
+
+        # 2. Lệnh xem hồ sơ theo ngày cụ thể: ho so ngay 02/09/2026, hs ngay 02-09-2026
+        date_match = re.search(
+            r"^(?:xem\s+)?(?:danh\s*sach\s+)?(?:ho\s*so|hs)\s+ngay\s+(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>\d{4})$",
+            normalized_content,
+        )
+        if date_match:
+            try:
+                d = datetime(
+                    int(date_match.group("year")),
+                    int(date_match.group("month")),
+                    int(date_match.group("day")),
+                ).date()
+                return {
+                    "is_command": True,
+                    "command_type": "list_submissions",
+                    "filter_type": "specific_date",
+                    "target_date": d,
+                    "source": "builtin",
+                }
+            except ValueError:
+                pass
+
+        # 3. Lọc theo trạng thái và thời gian
+        # 3.1 Chưa phân công
+        if any(kw in normalized_content for kw in ["chua phan cong"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "unassigned",
+                "source": "builtin",
+            }
+
+        # 3.2 Chưa xử lý
+        if any(kw in normalized_content for kw in ["chua xu ly", "cho xu ly"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "pending",
+                "source": "builtin",
+            }
+
+        # 3.3 Đang xử lý
+        if any(kw in normalized_content for kw in ["dang xu ly"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "in_progress",
+                "source": "builtin",
+            }
+
+        # 3.4 Hôm nay
+        if any(kw in normalized_content for kw in ["ho so hom nay", "hs hom nay", "danh sach ho so hom nay"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "today",
+                "source": "builtin",
+            }
+
+        # 3.5 Hôm qua
+        if any(kw in normalized_content for kw in ["ho so hom qua", "hs hom qua", "danh sach ho so hom qua"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "yesterday",
+                "source": "builtin",
+            }
+
+        # 3.6 Khẩn cấp / Ưu tiên
+        if any(kw in normalized_content for kw in ["khan cap", "ho so uu tien", "hs uu tien"]):
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "urgent",
+                "source": "builtin",
+            }
+
+        # 4. Lệnh mặc định xem danh sách
+        list_phrases = {
+            "danh sach ho so",
+            "tat ca ho so",
+            "ho so cua toi",
+            "cac ho so",
+            "ds ho so",
+            "dshs",
+            "ho so",
+            "xem danh sach ho so",
+            "xem tat ca ho so",
+        }
+        if normalized_content in list_phrases:
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": "default",
+                "source": "builtin",
+            }
+
+        return self._not_command()
+
+    def _extract_submission_id_from_match(self, match, content: str) -> Optional[int]:
+        if hasattr(match, "groupdict") and "submission_id" in match.groupdict():
+            try:
+                return int(match.groupdict()["submission_id"])
+            except (ValueError, TypeError):
+                pass
+        
+        digits = re.search(r"#?(\d+)", content or "")
+        if digits:
+            try:
+                return int(digits.group(1))
+            except (ValueError, TypeError):
+                pass
+        return None
 
     def _match_pattern(self, pattern, original_content, normalized_content):
         pattern_text = pattern.pattern_text or ""
@@ -67,7 +209,7 @@ class CommandParser:
 
         return None
 
-    def _build_command_result(self, command, match, content):
+    def _build_command_result(self, command, match, content, normalized_content=""):
         if command.action == "today_insight":
             return {
                 "is_command": True,
@@ -95,6 +237,53 @@ class CommandParser:
 
         if command.action == "generate_report":
             return self._build_report_command(command, match, content)
+
+        if command.action == "list_submissions":
+            filter_type = "default"
+            target_date = None
+            norm = normalized_content or self._normalize(content)
+
+            if "chua phan cong" in norm:
+                filter_type = "unassigned"
+            elif "chua xu ly" in norm or "cho xu ly" in norm:
+                filter_type = "pending"
+            elif "dang xu ly" in norm:
+                filter_type = "in_progress"
+            elif "hom nay" in norm:
+                filter_type = "today"
+            elif "hom qua" in norm:
+                filter_type = "yesterday"
+            elif "khan cap" in norm or "uu tien" in norm:
+                filter_type = "urgent"
+            else:
+                date_match = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", content or "")
+                if date_match:
+                    try:
+                        target_date = datetime(int(date_match.group(3)), int(date_match.group(2)), int(date_match.group(1))).date()
+                        filter_type = "specific_date"
+                    except ValueError:
+                        pass
+
+            return {
+                "is_command": True,
+                "command_type": "list_submissions",
+                "filter_type": filter_type,
+                "target_date": target_date,
+                "admin_command_id": command.id,
+                "source": "db_pattern",
+            }
+
+        if command.action == "submission_detail":
+            sub_id = self._extract_submission_id_from_match(match, content)
+            if not sub_id:
+                return self._not_command()
+            return {
+                "is_command": True,
+                "command_type": "submission_detail",
+                "submission_id": sub_id,
+                "admin_command_id": command.id,
+                "source": "db_pattern",
+            }
 
         return self._not_command()
 
@@ -213,6 +402,7 @@ class CommandParser:
 
     def _normalize(self, value: str) -> str:
         value = str(value or "").strip().lower()
+        value = value.replace("đ", "d").replace("Đ", "d")
         value = unicodedata.normalize("NFD", value)
         value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
         value = re.sub(r"[^a-z0-9\s_\-/]", " ", value)

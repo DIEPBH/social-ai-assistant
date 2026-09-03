@@ -1,0 +1,313 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social AI Assistant - Trợ lý AI Phân tích & Xử lý Tình hình An ninh Trật tự</title>
+    <meta name="description"
+        content="Social AI Assistant - Trợ lý AI thu thập, phân tích, xử lý tình hình an ninh trật tự trên môi trường mạng từ Facebook và Zalo OA.">
+
+    <!-- Google Fonts: Be Vietnam Pro (tối ưu hóa hoàn hảo tiếng Việt) & Plus Jakarta Sans / JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="{% static 'css/landing-3d.css' %}">
+</head>
+
+<body>
+
+    <!-- 3D Canvas Background Container -->
+    <div id="canvas-container"></div>
+    <div class="ambient-glow ambient-glow-1"></div>
+    <div class="ambient-glow ambient-glow-2"></div>
+
+    <div class="page-wrapper">
+        <!-- Navigation Bar -->
+        <header class="navbar">
+            <div class="nav-container">
+                <a href="/" class="logo-group">
+                    <div class="logo-img-wrapper">
+                        <img src="{% static 'img/logo.svg' %}" alt="Logo">
+                    </div>
+                    <span class="logo-text">Social AI Assistant</span>
+                    <span class="logo-badge">Social AI</span>
+                </a>
+
+                <ul class="nav-links">
+                    <li><a href="#features"><i class="fa-solid fa-layer-group"></i> Tính năng</a></li>
+                    <li><a href="#pipeline"><i class="fa-solid fa-diagram-project"></i> Quy trình AI</a></li>
+                    <li><a href="/social-messages/admin-dashboard/"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                    </li>
+                    <li><a href="/social-messages/privacy-policy/"><i class="fa-solid fa-shield-halved"></i> Chính
+                            sách</a></li>
+                </ul>
+
+                <div class="nav-cta-group">
+                    <a href="/admin/" class="btn btn-primary btn-sm">
+                        <i class="fa-solid fa-shield-halved"></i> Đăng nhập Quản trị
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hero Section -->
+        <main>
+            <section class="hero-section">
+                <div class="hero-grid">
+                    <!-- Left Hero Content -->
+                    <div class="hero-content">
+                        <div class="hero-pill">
+                            <span class="pulse-dot"></span>
+                            <span>Hệ thống Giám sát &amp; Xử lý Thời gian thực</span>
+                        </div>
+
+                        <h1 class="hero-title">
+                            <span class="title-prefix">Trợ lý AI thu thập, phân tích,</span>
+                            <span class="title-main">xử lý tình hình <span class="text-nowrap">an ninh trật
+                                    tự</span></span>
+                            <span class="title-suffix">trên môi trường mạng</span>
+                        </h1>
+
+                        <p class="hero-description">
+                            Hệ thống AI thông minh kết nối Facebook Messenger &amp; Zalo Official Account, tự động phân
+                            loại thông tin phản ánh và điều phối chỉ đạo xử lý theo thời gian thực.
+                        </p>
+
+                        <div class="hero-actions">
+                            <a href="/admin/" class="btn btn-primary btn-lg">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i> Đăng nhập Quản trị
+                            </a>
+                            <a href="/social-messages/admin-dashboard/" class="btn btn-secondary btn-lg">
+                                <i class="fa-solid fa-chart-pie"></i> Xem Dashboard
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Right Status HUD Card -->
+                    <div class="status-hud-card">
+                        <div class="status-hud-header">
+                            <div class="status-title">
+                                <i class="fa-solid fa-satellite-dish" style="color: var(--primary-color);"></i> System
+                                Security HUD
+                            </div>
+                            <span class="status-badge-live">
+                                <span class="pulse-dot"></span> LIVE OPERATIONAL
+                            </span>
+                        </div>
+
+                        <div class="hud-metrics">
+                            <div class="hud-metric-item">
+                                <div class="hud-metric-label">Độ trễ Xử lý AI</div>
+                                <div class="hud-metric-val" id="hud-latency">16 <small>ms</small></div>
+                            </div>
+                            <div class="hud-metric-item">
+                                <div class="hud-metric-label">Sẵn sàng Trực tuyến</div>
+                                <div class="hud-metric-val">99.98 <small>%</small></div>
+                            </div>
+                            <div class="hud-metric-item">
+                                <div class="hud-metric-label">Phân luồng Bất đồng bộ</div>
+                                <div class="hud-metric-val">Async <small>Celery</small></div>
+                            </div>
+                            <div class="hud-metric-item">
+                                <div class="hud-metric-label">Kiểm soát &amp; Giới hạn</div>
+                                <div class="hud-metric-val">Active <small>Redis</small></div>
+                            </div>
+                        </div>
+
+                        <div class="channel-tag-group">
+                            <div class="channel-tag fb">
+                                <i class="fa-brands fa-facebook-messenger"></i> Facebook Messenger
+                            </div>
+                            <div class="channel-tag zalo">
+                                <i class="fa-solid fa-comment-dots"></i> Zalo Official Account
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features Section with 3D Tilt Cards -->
+            <section id="features" class="section">
+                <div class="section-header">
+                    <span class="section-pill">Kiến trúc &amp; Công nghệ</span>
+                    <h2 class="section-title">Khả năng Vượt trội của Hệ thống</h2>
+                    <p class="section-subtitle">
+                        Tích hợp toàn diện từ tầng tiếp nhận webhook, phân tích ngôn ngữ tự nhiên đến chỉ đạo xử lý tập
+                        trung.
+                    </p>
+                </div>
+
+                <div class="cards-grid">
+                    <!-- Card 1 -->
+                    <div class="tilt-card">
+                        <div class="card-glow-spot"></div>
+                        <div class="card-icon green">
+                            <i class="fa-solid fa-network-wired"></i>
+                        </div>
+                        <h3 class="card-title">Đa Kênh Webhook Normalizer</h3>
+                        <p class="card-desc">
+                            Chuẩn hóa đồng nhất các định dạng tin nhắn phản ánh từ Facebook Messenger Graph API và Zalo
+                            OA API thành cấu trúc nghiệp vụ tiêu chuẩn.
+                        </p>
+                        <div class="card-footer-tags">
+                            <span class="tag-badge">Facebook API</span>
+                            <span class="tag-badge">Zalo OA</span>
+                            <span class="tag-badge">Token Refresh</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <div class="tilt-card">
+                        <div class="card-glow-spot"></div>
+                        <div class="card-icon emerald">
+                            <i class="fa-solid fa-brain"></i>
+                        </div>
+                        <h3 class="card-title">Intake Router &amp; Form AI</h3>
+                        <p class="card-desc">
+                            Tự động trích xuất các trường thông tin (họ tên, số điện thoại, địa bàn, thời gian, mức độ
+                            khẩn cấp) và phân loại tình huống chính xác.
+                        </p>
+                        <div class="card-footer-tags">
+                            <span class="tag-badge">Entity Extraction</span>
+                            <span class="tag-badge">Validation Rules</span>
+                            <span class="tag-badge">Multi-turn State</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 3 -->
+                    <div class="tilt-card">
+                        <div class="card-glow-spot"></div>
+                        <div class="card-icon gold">
+                            <i class="fa-solid fa-shield-virus"></i>
+                        </div>
+                        <h3 class="card-title">Admin Guard &amp; Lệnh Chỉ đạo</h3>
+                        <p class="card-desc">
+                            Bảo vệ 2 lớp với cơ chế Blacklist &amp; Rate Limiting trên Redis. Nhận diện lệnh quản trị
+                            đặc quyền từ Zalo/Facebook tức thì.
+                        </p>
+                        <div class="card-footer-tags">
+                            <span class="tag-badge">Rate Limiting</span>
+                            <span class="tag-badge">Spam Defense</span>
+                            <span class="tag-badge">Admin Dispatcher</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 4 -->
+                    <div class="tilt-card">
+                        <div class="card-glow-spot"></div>
+                        <div class="card-icon teal">
+                            <i class="fa-solid fa-chart-column"></i>
+                        </div>
+                        <h3 class="card-title">Báo cáo &amp; Phân tích 24h</h3>
+                        <p class="card-desc">
+                            Celery Beat tự động tổng hợp báo cáo tình hình mỗi 24h, phân tích sắc thái cảm xúc, phát
+                            hiện điểm nóng và gửi thông báo định kỳ.
+                        </p>
+                        <div class="card-footer-tags">
+                            <span class="tag-badge">Daily Summary</span>
+                            <span class="tag-badge">Sentiment AI</span>
+                            <span class="tag-badge">Celery Beat</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Pipeline Flow Section -->
+            <section id="pipeline" class="section">
+                <div class="section-header">
+                    <span class="section-pill">Luồng Xử lý Dữ liệu</span>
+                    <h2 class="section-title">Quy trình Tự động Hóa Khép kín</h2>
+                    <p class="section-subtitle">Từ phản ánh của nhân dân đến phân loại và báo cáo chỉ đạo của cơ quan
+                        quản lý</p>
+                </div>
+
+                <div class="pipeline-container">
+                    <div class="pipeline-steps">
+                        <div class="pipeline-step">
+                            <div class="step-number">1</div>
+                            <h4 class="step-title">Tiếp nhận Thông tin</h4>
+                            <p class="step-desc">Nhân dân gửi tin nhắn phản ánh qua Facebook Messenger hoặc Zalo OA</p>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-number">2</div>
+                            <h4 class="step-title">Chuẩn hóa &amp; Lọc An toàn</h4>
+                            <p class="step-desc">Webhook Normalizer xử lý và kiểm soát tần suất gửi tin trên Redis</p>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-number">3</div>
+                            <h4 class="step-title">Phân tích &amp; Trích xuất AI</h4>
+                            <p class="step-desc">Intake Router phân loại nội dung, trích xuất đối tượng, thời gian, địa
+                                điểm</p>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-number">4</div>
+                            <h4 class="step-title">Điều phối &amp; Báo cáo</h4>
+                            <p class="step-desc">Hàng đợi Celery xử lý, lưu hồ sơ và tự động gửi báo cáo chỉ đạo</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Access CTA Hub -->
+            <section class="section">
+                <div class="cta-banner">
+                    <h2>Sẵn sàng Truy cập Trung tâm Điều hành?</h2>
+                    <p>Truy cập hệ thống quản trị để theo dõi, chỉ đạo và xử lý tình hình an ninh trật tự trong thời
+                        gian thực.</p>
+                    <div class="cta-button-group">
+                        <a href="/admin/" class="btn btn-primary btn-lg">
+                            <i class="fa-solid fa-shield-halved"></i> Đăng nhập Quản trị
+                        </a>
+                        <a href="/social-messages/admin-dashboard/" class="btn btn-secondary btn-lg">
+                            <i class="fa-solid fa-chart-line"></i> Dashboard Tổng quan
+                        </a>
+                        <a href="/health/" class="btn btn-secondary btn-lg" target="_blank">
+                            <i class="fa-solid fa-heart-pulse"></i> Kiểm tra API Health
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-container">
+                <div class="footer-info">
+                    <div class="logo-group">
+                        <div class="logo-img-wrapper" style="width: 32px; height: 32px;">
+                            <img src="{% static 'img/logo.svg' %}" alt="Logo">
+                        </div>
+                        <span class="logo-text" style="font-size: 1.15rem;">Social AI Assistant</span>
+                    </div>
+                    <p class="footer-copy">© 2026 Social AI Assistant. Trợ lý AI thu thập, phân tích, xử lý tình hình an
+                        ninh trật tự trên môi trường mạng.</p>
+                </div>
+
+                <ul class="footer-links">
+                    <li><a href="/admin/"><i class="fa-solid fa-shield-halved"></i> Quản trị</a></li>
+                    <li><a href="/social-messages/admin-dashboard/"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+                    </li>
+                    <li><a href="/social-messages/privacy-policy/"><i class="fa-solid fa-shield-cat"></i> Chính sách</a>
+                    </li>
+                    <li><a href="/health/"><i class="fa-solid fa-heart-pulse"></i> API Status</a></li>
+                </ul>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Three.js (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Custom 3D Landing Logic -->
+    <script src="{% static 'js/landing-3d.js' %}"></script>
+</body>
+
+</html>

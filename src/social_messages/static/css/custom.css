@@ -1,4 +1,0 @@
-/* Override white color for user panel text when user lacks view permission */
-aside.main-sidebar .user-panel .info span {
-    color: #343a40 !important;
-}

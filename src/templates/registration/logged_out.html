@@ -1,0 +1,89 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:"vi" }}">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Đã Đăng Xuất | Social AI Assistant - Security Command Center</title>
+    
+    <!-- Google Fonts: Be Vietnam Pro, JetBrains Mono, Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{% static 'css/admin_login.css' %}">
+</head>
+
+<body>
+    <!-- 3D Canvas Background Container -->
+    <div id="canvas-container"></div>
+
+    <div class="login-container">
+        <!-- Left Side: 3D Branding & Security Info -->
+        <div class="login-image-section">
+            <div class="login-brand-content">
+                <div class="brand-security-pill">
+                    <span class="pulse-dot"></span>
+                    <span>HỆ THỐNG AN NINH &amp; ĐIỀU HÀNH THỜI GIAN THỰC</span>
+                </div>
+
+                <div class="brand-logo-large">
+                    <img src="{% static 'img/logo.svg' %}" alt="Social AI Logo">
+                </div>
+
+                <h1 class="brand-title">Social AI Assistant</h1>
+                <p class="brand-subtitle">
+                    Trợ lý AI thu thập, phân tích, xử lý tình hình an ninh trật tự trên môi trường mạng từ Facebook &amp; Zalo OA.
+                </p>
+
+                <div class="security-features-badge">
+                    <div class="feat-item"><i class="fa-solid fa-shield-halved"></i> 256-bit SSL</div>
+                    <div class="feat-item"><i class="fa-solid fa-microchip"></i> AI Neural Engine</div>
+                    <div class="feat-item"><i class="fa-solid fa-bolt"></i> Real-time Queue</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: 3D Glassmorphism Logout Status Box -->
+        <div class="login-form-section">
+            <div class="login-box tilt-card">
+                <div class="card-glow-spot"></div>
+
+                <div class="login-header">
+                    <div class="login-icon-wrap" style="color: var(--primary-color);">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </div>
+                    <h2>Đã Đăng Xuất Thành Công</h2>
+                    <p class="subtitle">Phiên làm việc của bạn đã được kết thúc an toàn</p>
+                </div>
+
+                <div style="margin: 1.5rem 0 2rem; color: var(--text-muted); font-size: 0.95rem; text-align: center; line-height: 1.6;">
+                    Cảm ơn bạn đã sử dụng hệ thống quản trị điều hành <strong>Social AI Assistant</strong>.
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 1rem; position: relative; z-index: 10;">
+                    <a href="{% url 'admin:login' %}" class="btn-login-3d" style="text-decoration: none;">
+                        <span>Đăng nhập lại</span>
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    </a>
+
+                    <a href="/" class="back-home-link" style="justify-content: center; font-size: 0.95rem; padding: 0.5rem 0;">
+                        <i class="fa-solid fa-house"></i> Về Trang chủ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Custom 3D Admin Logic -->
+    <script src="{% static 'js/admin-3d.js' %}"></script>
+</body>
+
+</html>

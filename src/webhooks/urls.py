@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    landing_page,
     health_check,
     test_message_webhook,
     facebook_webhook,
@@ -12,6 +13,6 @@ urlpatterns = [
     path("test-message/", test_message_webhook, name="test-message-webhook"),
     path("facebook/", facebook_webhook, name="facebook_webhook"),
     path("zalo/", zalo_webhook, name="zalo_webhook"),
-    path("", health_check, name="webhooks-root-health"),  # Đảm bảo rằng URL gốc cũng được định tuyến đến health_check
+    path("", landing_page, name="home"),
     path("zalo/oauth/callback/", zalo_oauth_callback, name="zalo_oauth_callback"),
 ]

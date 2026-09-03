@@ -210,6 +210,14 @@ def process_admin_command(message_id: int):
                 "reason": "sender_not_allowed",
             }
 
+        user = guard.get_user_by_zalo_id(message.sender_id)
+        if not user:
+            return {
+                "status": "ignored",
+                "message_id": message.id,
+                "reason": "user_not_found_or_inactive",
+            }
+
         parser = CommandParser()
         parsed = parser.parse(message.content or "")
 
@@ -219,7 +227,10 @@ def process_admin_command(message_id: int):
             ai_parsed = AdminAIInterpreter().interpret(message.content or "")
 
             if ai_parsed.get("is_command"):
-                parsed = build_report_command_from_ai(ai_parsed)
+                if ai_parsed.get("command_type") in ["generate_daily_report", "generate_custom_report"]:
+                    parsed = build_report_command_from_ai(ai_parsed)
+                else:
+                    parsed = ai_parsed
             else:
                 parsed = ai_parsed
 
@@ -306,6 +317,89 @@ def process_admin_command(message_id: int):
                 "admin_command_id": parsed.get("admin_command_id"),
                 "report_id": report.id,
                 "report_task_id": report_task.id,
+            }
+
+        if parsed["command_type"] == "list_submissions":
+            from social_messages.services.admin_submission_service import AdminSubmissionService
+            filter_type = parsed.get("filter_type", "default")
+            target_date = parsed.get("target_date")
+            reply_text = AdminSubmissionService().format_submissions_list(
+                user=user,
+                filter_type=filter_type,
+                target_date=target_date,
+            )
+            outbound_result = AdminReplyService().send(message, reply_text)
+            return {
+                "status": "success",
+                "message_id": message.id,
+                "command_type": "list_submissions",
+                "filter_type": filter_type,
+                "admin_command_id": parsed.get("admin_command_id"),
+                "outbound_result": outbound_result,
+            }
+
+        if parsed["command_type"] == "submission_detail":
+            sub_id = parsed.get("submission_id")
+            if not sub_id:
+                reply_text = "Vui lòng nhập mã hồ sơ hợp lệ. Ví dụ: 'xem hồ sơ 114'"
+                outbound_result = AdminReplyService().send(message, reply_text)
+                return {
+                    "status": "error",
+                    "message_id": message.id,
+                    "command_type": "submission_detail",
+                    "error": "missing_submission_id",
+                    "outbound_result": outbound_result,
+                }
+
+            from social_messages.services.admin_submission_service import AdminSubmissionService
+            submission_service = AdminSubmissionService()
+            has_access, reply_text, submission = submission_service.get_submission_detail(user, sub_id)
+
+            outbound_result = AdminReplyService().send(message, reply_text)
+
+            attachments_sent = 0
+            if has_access and submission:
+                attachments = submission_service.collect_submission_attachments(submission)
+                if attachments:
+                    import time
+                    from social_messages.services.zalo_sender import ZaloOASender
+                    channel = message.conversation.channel
+                    sender = ZaloOASender()
+                    access_token = channel.access_token
+                    target_user_id = message.sender_id
+
+                    max_send = 8
+                    for idx, att in enumerate(attachments[:max_send]):
+                        caption = f"📎 Tài liệu #{idx + 1} của hồ sơ #{submission.id}"
+                        try:
+                            res = sender.send_attachment(
+                                access_token=access_token,
+                                user_id=target_user_id,
+                                attachment=att,
+                                caption=caption,
+                            )
+                            if res.get("status") == "success":
+                                attachments_sent += 1
+                            time.sleep(0.5)
+                        except Exception as e:
+                            logger.warning("Failed to send attachment %s to admin: %s", att.get("url"), e)
+
+                    if len(attachments) > max_send:
+                        remaining = len(attachments) - max_send
+                        AdminReplyService().send(
+                            message,
+                            f"ℹ️ Hồ sơ còn {remaining} tài liệu đính kèm khác. Anh/chị có thể đăng nhập trang web quản trị để xem toàn bộ."
+                        )
+
+            return {
+                "status": "success",
+                "message_id": message.id,
+                "command_type": "submission_detail",
+                "submission_id": sub_id,
+                "has_access": has_access,
+                "attachments_sent": attachments_sent,
+                "admin_command_id": parsed.get("admin_command_id"),
+                "outbound_result": outbound_result,
             }
 
         return {

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from typing import Any, Dict
 
 import requests
@@ -13,6 +14,8 @@ class AdminAIInterpreter:
         "system_status",
         "generate_daily_report",
         "generate_custom_report",
+        "list_submissions",
+        "submission_detail",
         "unknown",
     }
 
@@ -51,11 +54,15 @@ class AdminAIInterpreter:
             "- system_status: admin muốn kiểm tra hệ thống có lỗi không.\n"
             "- generate_daily_report: admin muốn tạo báo cáo cho một ngày cụ thể.\n"
             "- generate_custom_report: admin muốn tạo báo cáo cho tuần này hoặc tháng này.\n"
+            "- list_submissions: admin/chuyên viên muốn xem danh sách các hồ sơ tiếp nhận hoặc hồ sơ được giao.\n"
+            "- submission_detail: admin/chuyên viên muốn xem chi tiết một hồ sơ cụ thể theo ID.\n"
             "- unknown: không hiểu hoặc không phải lệnh quản trị.\n\n"
             "JSON bắt buộc có dạng:\n"
             "{"
             "\"is_command\": true/false, "
             "\"command_type\": \"...\", "
+            "\"submission_id\": 123 hoặc null, "
+            "\"filter_type\": \"default|unassigned|pending|in_progress|today|yesterday|urgent|specific_date\", "
             "\"date_type\": \"today|yesterday|specific|none\", "
             "\"date\": \"YYYY-MM-DD hoặc null\", "
             "\"range\": \"this_week|this_month|none\", "
@@ -64,6 +71,16 @@ class AdminAIInterpreter:
             "Quy tắc:\n"
             "- Nếu hỏi tình hình, tổng quan, hôm nay có gì nổi bật: today_insight.\n"
             "- Nếu hỏi hệ thống ổn không, có lỗi không, kiểm tra hệ thống: system_status.\n"
+            "- Nếu yêu cầu xem danh sách hồ sơ: list_submissions. Xác định filter_type:\n"
+            "  + 'chưa phân công': filter_type=unassigned\n"
+            "  + 'chưa xử lý': filter_type=pending\n"
+            "  + 'đang xử lý': filter_type=in_progress\n"
+            "  + 'hôm nay': filter_type=today\n"
+            "  + 'hôm qua': filter_type=yesterday\n"
+            "  + 'khẩn cấp' / 'ưu tiên': filter_type=urgent\n"
+            "  + ngày cụ thể: filter_type=specific_date, date=YYYY-MM-DD\n"
+            "  + danh sách chung: filter_type=default\n"
+            "- Nếu yêu cầu xem hồ sơ cụ thể theo mã/ID (ví dụ 'xem hồ sơ 114', 'chi tiết hồ sơ 99'): submission_detail, submission_id=mã số.\n"
             "- Nếu yêu cầu báo cáo hôm nay: generate_daily_report, date_type=today.\n"
             "- Nếu yêu cầu báo cáo hôm qua: generate_daily_report, date_type=yesterday.\n"
             "- Nếu yêu cầu báo cáo ngày cụ thể: generate_daily_report, date_type=specific, date=YYYY-MM-DD.\n"
@@ -128,9 +145,26 @@ class AdminAIInterpreter:
 
         is_command = bool(parsed.get("is_command")) and command_type != "unknown"
 
+        sub_id = parsed.get("submission_id")
+        try:
+            sub_id = int(sub_id) if sub_id is not None else None
+        except (ValueError, TypeError):
+            sub_id = None
+
+        filter_type = str(parsed.get("filter_type") or "default").strip()
+        target_date = None
+        if parsed.get("date"):
+            try:
+                target_date = datetime.strptime(parsed.get("date"), "%Y-%m-%d").date()
+            except Exception:
+                pass
+
         return {
             "is_command": is_command,
             "command_type": command_type if is_command else None,
+            "submission_id": sub_id,
+            "filter_type": filter_type,
+            "target_date": target_date,
             "date_type": parsed.get("date_type") or "none",
             "date": parsed.get("date"),
             "range": parsed.get("range") or "none",

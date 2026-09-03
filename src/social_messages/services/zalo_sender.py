@@ -158,6 +158,92 @@ class ZaloOASender:
 
         return self._send_payload(access_token, payload)
 
+    def send_attachment(
+        self,
+        access_token: str,
+        user_id: str,
+        attachment: Dict[str, Any],
+        caption: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Gửi tệp đính kèm (ảnh, video, tệp tin) qua Zalo OA.
+        - Nếu là image: thử gửi bằng send_media_template_message.
+        - Nếu là file/video/audio hoặc khi media template thất bại:
+          thử tải tạm thời và dùng upload_file + send_file_message.
+        - Nếu vẫn thất bại: gửi fallback tin nhắn văn bản kèm link xem/tải trực tiếp.
+        """
+        import os
+        import tempfile
+        from urllib.parse import urlparse
+        import logging
+
+        local_logger = logging.getLogger(__name__)
+
+        att_type = attachment.get("type", "file")
+        url = attachment.get("url") or ""
+        name = attachment.get("name") or ("Tệp đính kèm" if att_type != "image" else "Hình ảnh đính kèm")
+
+        if not url:
+            return {"status": "error", "reason": "empty_url"}
+
+        text_label = caption or f"📎 {name}"
+
+        # 1. Nếu là hình ảnh:
+        if att_type == "image":
+            try:
+                res = self.send_media_template_message(
+                    access_token=access_token,
+                    user_id=user_id,
+                    text=text_label,
+                    image_url=url,
+                )
+                if res.get("error") == 0 or not res.get("error"):
+                    return {"status": "success", "method": "media_template", "result": res}
+            except Exception as e:
+                local_logger.warning("send_media_template_message failed for %s: %s", url, e)
+
+        # 2. Thử tải file tạm thời và gửi qua API upload_file + send_file_message
+        try:
+            parsed = urlparse(url)
+            ext = os.path.splitext(parsed.path)[1] or (".jpg" if att_type == "image" else ".dat")
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp_path = tmp.name
+
+            resp = requests.get(url, timeout=20, stream=True)
+            resp.raise_for_status()
+            file_size = 0
+            with open(tmp_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=65536):
+                    f.write(chunk)
+                    file_size += len(chunk)
+
+            # Giới hạn Zalo OA upload file thường là 5MB
+            if file_size <= 5 * 1024 * 1024:
+                file_token = self.upload_file(access_token, tmp_path)
+                file_res = self.send_file_message(access_token, user_id, file_token)
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+                return {"status": "success", "method": "file_message", "result": file_res}
+            else:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+        except Exception as e:
+            local_logger.warning("upload_file + send_file_message failed for %s: %s", url, e)
+            try:
+                if "tmp_path" in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+
+        # 3. Fallback: Gửi tin nhắn chứa link tải trực tiếp
+        fallback_text = f"{text_label}\n🔗 Link xem/tải: {url}"
+        fb_res = self.send_text_message(access_token=access_token, user_id=user_id, text=fallback_text)
+        return {"status": "success", "method": "link_fallback", "result": fb_res}
+
     def get_user_profile(self, access_token: str, user_id: str) -> Dict[str, Any]:
         if not access_token:
             raise ValueError("Missing Zalo OA access token")

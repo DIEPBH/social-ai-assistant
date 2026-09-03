@@ -1,70 +1,120 @@
 {% load i18n static %}
 <!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE|default:" en-us" }}">
+<html lang="{{ LANGUAGE_CODE|default:"vi" }}">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{% trans 'Log in' %} | Social AI Assistant</title>
+    <title>{% trans 'Log in' %} | Social AI Assistant - Security Command Center</title>
+    
+    <!-- Google Fonts: Be Vietnam Pro, JetBrains Mono, Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="{% static 'css/admin_login.css' %}">
     {{ form.media }}
 </head>
 
 <body>
+    <!-- 3D Canvas Background Container -->
+    <div id="canvas-container"></div>
+    <div class="ambient-glow ambient-glow-1"></div>
+    <div class="ambient-glow ambient-glow-2"></div>
+
     <div class="login-container">
+        <!-- Left Side: 3D Branding & Security Info -->
         <div class="login-image-section">
-            <div class="login-image-overlay"></div>
-            <div class="login-image-content">
-                <h1>Social AI Assistant</h1>
-                <p>Trợ lý AI thu thập, phân tích, xử lý tình hình an ninh trật tự trên môi trường mạng.</p>
+            <div class="login-brand-content">
+                <div class="brand-security-pill">
+                    <span class="pulse-dot"></span>
+                    <span>HỆ THỐNG AN NINH &amp; ĐIỀU HÀNH THỜI GIAN THỰC</span>
+                </div>
+
+                <div class="brand-logo-large">
+                    <img src="{% static 'img/logo.svg' %}" alt="Social AI Logo">
+                </div>
+
+                <h1 class="brand-title">Social AI Assistant</h1>
+                <p class="brand-subtitle">
+                    Trợ lý AI thu thập, phân tích, xử lý tình hình an ninh trật tự trên môi trường mạng từ Facebook &amp; Zalo OA.
+                </p>
+
+                <div class="security-features-badge">
+                    <div class="feat-item"><i class="fa-solid fa-shield-halved"></i> 256-bit SSL</div>
+                    <div class="feat-item"><i class="fa-solid fa-microchip"></i> AI Neural Engine</div>
+                    <div class="feat-item"><i class="fa-solid fa-bolt"></i> Real-time Queue</div>
+                </div>
             </div>
         </div>
 
+        <!-- Right Side: 3D Glassmorphism Login Box -->
         <div class="login-form-section">
-            <div class="login-box">
-                <div class="login-logo">
-                    <img src="{% static 'img/logo.svg' %}" alt="Logo" width="200" height="200"
-                        style="object-fit: contain; filter: drop-shadow(0 0 15px rgba(0, 230, 118, 0.5));">
+            <div class="login-box tilt-card">
+                <div class="card-glow-spot"></div>
+
+                <div class="login-header">
+                    <div class="login-icon-wrap">
+                        <i class="fa-solid fa-shield-cat"></i>
+                    </div>
+                    <h2>Đăng Nhập Quản Trị</h2>
+                    <p class="subtitle">Xác thực quyền quản trị hệ thống điều hành</p>
                 </div>
-                <h2>Admin Login</h2>
-                <p class="subtitle">Đăng nhập để truy cập hệ thống quản trị</p>
 
                 {% if form.errors and not form.non_field_errors %}
-                <p class="errornote">
-                    {% if form.errors.items|length == 1 %}{% trans "Please correct the error below." %}{% else %}{%
-                    trans "Please correct the errors below." %}{% endif %}
-                </p>
+                <div class="alert alert-danger errornote">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    {% if form.errors.items|length == 1 %}
+                        {% trans "Please correct the error below." %}
+                    {% else %}
+                        {% trans "Please correct the errors below." %}
+                    {% endif %}
+                </div>
                 {% endif %}
 
                 {% if form.non_field_errors %}
                 {% for error in form.non_field_errors %}
-                <p class="errornote">
+                <div class="alert alert-danger errornote">
+                    <i class="fa-solid fa-circle-exclamation"></i>
                     {{ error }}
-                </p>
+                </div>
                 {% endfor %}
                 {% endif %}
 
                 {% if user.is_authenticated %}
-                <p class="errornote">
+                <div class="alert alert-warning errornote">
+                    <i class="fa-solid fa-user-shield"></i>
                     {% blocktrans trimmed %}
                     You are authenticated as {{ username }}, but are not authorized to
                     access this page. Would you like to login to a different account?
                     {% endblocktrans %}
-                </p>
+                </div>
                 {% endif %}
 
                 <form action="{{ app_path }}" method="post" id="login-form">
                     {% csrf_token %}
 
                     <div class="form-group">
-                        <label for="id_username">{{ form.username.label }}</label>
-                        {{ form.username }}
+                        <label for="id_username">
+                            <i class="fa-solid fa-user-shield"></i> {{ form.username.label }}
+                        </label>
+                        <div class="input-wrap">
+                            {{ form.username }}
+                        </div>
                         {{ form.username.errors }}
                     </div>
 
                     <div class="form-group">
-                        <label for="id_password">{{ form.password.label }}</label>
-                        {{ form.password }}
+                        <label for="id_password">
+                            <i class="fa-solid fa-lock"></i> {{ form.password.label }}
+                        </label>
+                        <div class="input-wrap">
+                            {{ form.password }}
+                        </div>
                         {{ form.password.errors }}
                         <input type="hidden" name="next" value="{{ next }}">
                     </div>
@@ -75,28 +125,48 @@
 
                     {% url 'admin_password_reset' as password_reset_url %}
                     {% if password_reset_url %}
-                    <div class="password-reset-link" style="text-align: right; margin-bottom: 1rem;">
-                        <a href="{{ password_reset_url }}"
-                            style="color: var(--text-muted); font-size: 0.85rem; text-decoration: none;">{% trans
-                            'Forgotten your password or username?' %}</a>
+                    <div class="password-reset-link">
+                        <a href="{{ password_reset_url }}">
+                            <i class="fa-solid fa-key"></i> {% trans 'Forgotten your password or username?' %}
+                        </a>
                     </div>
                     {% endif %}
 
                     <div class="submit-row">
-                        <button type="submit" class="btn-primary">{% trans 'Log in' %}</button>
+                        <button type="submit" class="btn-login-3d">
+                            <span>{% trans 'Log in' %}</span>
+                            <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                        </button>
                     </div>
                 </form>
+
+                <div class="login-footer-info">
+                    <a href="/" class="back-home-link">
+                        <i class="fa-solid fa-house"></i> Về Trang chủ
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Three.js (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Custom 3D Admin Logic -->
+    <script src="{% static 'js/admin-3d.js' %}"></script>
+
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             var usernameField = document.getElementById('id_username');
-            if (usernameField) usernameField.classList.add('form-control');
+            if (usernameField) {
+                usernameField.classList.add('form-control');
+                usernameField.setAttribute('placeholder', 'Tài khoản quản trị');
+            }
 
             var passwordField = document.getElementById('id_password');
-            if (passwordField) passwordField.classList.add('form-control');
+            if (passwordField) {
+                passwordField.classList.add('form-control');
+                passwordField.setAttribute('placeholder', 'Mật khẩu bảo mật');
+            }
         });
     </script>
 </body>

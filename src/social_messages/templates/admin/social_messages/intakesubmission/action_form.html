@@ -1,42 +1,65 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block content %}
-<div class="content-main" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 40vh; text-align: center; padding: 20px;">
-    <h2 style="margin-bottom: 20px;">
-        {% if action_name == 'return' %}
-            Trả lại Hồ sơ #{{ original.id }}
-        {% elif action_name == 'complete' %}
-            Hoàn thành xử lý Hồ sơ #{{ original.id }}
-        {% endif %}
-    </h2>
-    <form method="post" action="{% url 'admin:intakesubmission_action' original.pk action_name %}" style="width: 100%; max-width: 600px;">
-        {% csrf_token %}
-        <fieldset class="module aligned" style="border: none; padding: 0;">
-            {% if action_name == 'return' %}
-                <div class="form-row" style="border: none; padding: 10px 0;">
-                    <div>
-                        <label class="required" for="return_reason" style="display:block; margin-bottom:10px; text-align: left;">Lý do trả lại:</label>
-                        <textarea name="return_reason" id="return_reason" rows="6" cols="50" required style="width:100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc;"></textarea>
-                    </div>
-                </div>
-            {% elif action_name == 'complete' %}
-                <div class="form-row" style="border: none; padding: 10px 0;">
-                    <div>
-                        <label class="required" for="processing_note" style="display:block; margin-bottom:10px; text-align: left;">Thông tin xử lý:</label>
-                        <textarea name="processing_note" id="processing_note" rows="6" cols="50" required style="width:100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc;"></textarea>
-                    </div>
-                </div>
-            {% endif %}
-        </fieldset>
-        <div class="submit-row" style="margin-top: 20px; text-align: center; background: none; border: none;">
-            <button type="submit" name="_save" class="default" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
-                <i class="fas fa-check"></i> Xác nhận
-            </button>
-            <a href="{% url 'admin:social_messages_intakesubmission_change' original.pk %}" class="closelink" style="background-color: #dc3545; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-left: 15px; font-size: 14px; display: inline-block;">
-                <i class="fas fa-times"></i> Hủy
-            </a>
+<div class="content-main" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; padding: 2rem 1rem;">
+    <div class="card tilt-card" style="width: 100%; max-width: 650px; padding: 2.5rem; border: 1px solid var(--border-glow); box-shadow: var(--shadow-card);">
+        <div class="card-glow-spot"></div>
+
+        <div style="text-align: center; margin-bottom: 1.75rem; position: relative; z-index: 1;">
+            <div style="width: 50px; height: 50px; margin: 0 auto 1rem; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: rgba(0, 230, 118, 0.12); color: var(--primary-color); border: 1px solid var(--border-glow);">
+                {% if action_name == 'return' %}
+                    <i class="fa-solid fa-arrow-rotate-left" style="color: #ef4444;"></i>
+                {% elif action_name == 'complete' %}
+                    <i class="fa-solid fa-circle-check" style="color: #00e676;"></i>
+                {% endif %}
+            </div>
+
+            <h2 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">
+                {% if action_name == 'return' %}
+                    Trả Lại Hồ Sơ #{{ original.id }}
+                {% elif action_name == 'complete' %}
+                    Hoàn Thành Xử Lý Hồ Sơ #{{ original.id }}
+                {% endif %}
+            </h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">
+                {% if action_name == 'return' %}
+                    Vui lòng nhập lý do trả lại hồ sơ để chuyển tiếp đến cán bộ phụ trách.
+                {% elif action_name == 'complete' %}
+                    Vui lòng cập nhật kết quả và nội dung xử lý hồ sơ an ninh trật tự.
+                {% endif %}
+            </p>
         </div>
-    </form>
+
+        <form method="post" action="{% url 'admin:intakesubmission_action' original.pk action_name %}" style="position: relative; z-index: 1;">
+            {% csrf_token %}
+            <fieldset class="module aligned" style="border: none; padding: 0;">
+                {% if action_name == 'return' %}
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label class="required" for="return_reason" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; color: var(--text-light); font-weight: 600; font-size: 0.9rem;">
+                            <i class="fa-solid fa-pen-to-square" style="color: #ef4444;"></i> Lý do trả lại:
+                        </label>
+                        <textarea name="return_reason" id="return_reason" rows="5" required class="form-control" placeholder="Nhập chi tiết lý do trả lại hồ sơ..."></textarea>
+                    </div>
+                {% elif action_name == 'complete' %}
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label class="required" for="processing_note" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; color: var(--text-light); font-weight: 600; font-size: 0.9rem;">
+                            <i class="fa-solid fa-clipboard-check" style="color: var(--primary-color);"></i> Thông tin kết quả xử lý:
+                        </label>
+                        <textarea name="processing_note" id="processing_note" rows="5" required class="form-control" placeholder="Nhập tóm tắt kết quả xác minh, xử lý tình huống..."></textarea>
+                    </div>
+                {% endif %}
+            </fieldset>
+
+            <div class="submit-row" style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; background: none; border: none; padding: 0;">
+                <button type="submit" name="_save" class="btn btn-primary" style="padding: 0.75rem 1.75rem;">
+                    <i class="fa-solid fa-check"></i> Xác nhận thực hiện
+                </button>
+                <a href="{% url 'admin:social_messages_intakesubmission_change' original.pk %}" class="btn btn-secondary" style="padding: 0.75rem 1.5rem;">
+                    <i class="fa-solid fa-xmark"></i> Hủy bỏ
+                </a>
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}

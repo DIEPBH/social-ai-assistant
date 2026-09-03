@@ -167,6 +167,7 @@ JAZZMIN_SETTINGS = {
     "show_sidebar": True,
     "navigation_expanded": True,
     "custom_css": "css/custom.css",
+    "custom_js": "js/admin-3d.js",
 
     "topmenu_links": [
     {"name": "Trang chủ", "url": "admin:index", "permissions": ["auth.view_user"]},

@@ -231,6 +231,8 @@ class AdminCommand(models.Model):
         ("system_status", "Trạng thái hệ thống"),
         ("generate_report", "Tạo báo cáo"),
         ("static_reply", "Trả lời cố định"),
+        ("list_submissions", "Danh sách hồ sơ"),
+        ("submission_detail", "Xem chi tiết hồ sơ"),
     ]
 
     REPORT_PERIOD_CHOICES = [

@@ -1,91 +1,558 @@
-/* custom.css */
-body {
-    background-image: url('../img/bg_green.png');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
+/* ==========================================================================
+   Social AI Assistant - Cyber Security & 3D Admin Theme (Matrix Green & Gold)
+   Compatible with Django Admin & Jazzmin Shell
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Matrix / Police Security Cyber Green Palette */
+  --bg-primary: #060e0a;
+  --bg-secondary: #0a1711;
+  --bg-card: rgba(8, 18, 13, 0.75);
+  --bg-card-hover: rgba(16, 36, 26, 0.88);
+  --bg-glass-heavy: rgba(6, 14, 10, 0.85);
+  --border-glow: rgba(0, 230, 118, 0.35);
+  --border-subtle: rgba(0, 230, 118, 0.15);
+
+  --primary-color: #00e676;
+  --secondary-color: #00a152;
+  --accent-green: #00e676;
+  --accent-emerald: #10b981;
+  --accent-teal: #00b4d8;
+  --accent-gold: #f59e0b;
+  --accent-amber: #fbbf24;
+  --accent-danger: #ef4444;
+  --accent-purple: #a855f7;
+
+  --text-main: #f0fdf4;
+  --text-light: #e8f5e9;
+  --text-muted: #a5d6a7;
+  --text-dim: #6b9a76;
+
+  --gradient-brand: linear-gradient(135deg, #00e676 0%, #00c853 50%, #00796b 100%);
+  --gradient-glow: radial-gradient(circle at center, rgba(0, 230, 118, 0.25) 0%, rgba(0, 161, 82, 0.08) 50%, transparent 70%);
+  --gradient-card: linear-gradient(135deg, rgba(0, 230, 118, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+
+  --font-main: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --shadow-neon: 0 0 25px rgba(0, 230, 118, 0.4);
+  --shadow-green-soft: 0 10px 30px rgba(0, 230, 118, 0.15);
+  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.65);
 }
 
-/* Glassmorphism for the main wrappers */
-.wrapper, .content-wrapper, .main-footer, .main-header {
-    background: transparent !important;
+/* Base Body & HTML Reset to Pure Crystal Dark */
+html,
+body,
+body.dark-mode {
+  font-family: var(--font-main) !important;
+  background-color: var(--bg-primary) !important;
+  background-image: none !important;
+  background: #060e0a !important;
+  color: var(--text-main) !important;
+  min-height: 100vh;
+  position: relative;
 }
 
-/* Glassmorphism for the navbar */
+/* 3D Canvas Background Container - Strictly Non-blocking for Clicks */
+#canvas-container,
+#canvas-container canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none !important;
+  user-select: none !important;
+  overflow: hidden;
+}
+
+/* Ambient Glow Disabled */
+.ambient-glow {
+  display: none !important;
+}
+
+/* Comprehensive Transparency for all AdminLTE / Jazzmin Wrappers */
+html body .wrapper,
+html body.dark-mode .wrapper,
+html body .content-wrapper,
+html body.dark-mode .content-wrapper,
+html body .content,
+html body.dark-mode .content,
+html body .content-header,
+html body.dark-mode .content-header,
+html body .container-fluid,
+html body.dark-mode .container-fluid,
+html body .main-footer,
+html body.dark-mode .main-footer,
+html body section.content,
+html body.dark-mode section.content,
+.wrapper,
+.content-wrapper,
+.content,
+.content-header,
+.container-fluid,
+.main-footer,
+section.content {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  position: relative;
+  z-index: 1;
+}
+
+.content-wrapper {
+  padding-bottom: 2rem;
+}
+
+/* Navbar (Main Header) */
+body.dark-mode .main-header,
+.dark-mode .main-header,
 .main-header {
-    background: rgba(10, 20, 15, 0.7) !important;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(0, 230, 118, 0.2) !important;
+  background: var(--bg-glass-heavy) !important;
+  background-color: var(--bg-glass-heavy) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-subtle) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
-/* Glassmorphism for sidebar */
+.main-header .navbar-nav .nav-link {
+  color: var(--text-muted) !important;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+.main-header .navbar-nav .nav-link:hover,
+.main-header .navbar-nav .nav-link:focus {
+  color: var(--primary-color) !important;
+  text-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+}
+
+/* Brand Logo */
+.brand-link {
+  background: rgba(6, 14, 10, 0.9) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  backdrop-filter: blur(16px);
+}
+
+.brand-link .brand-text {
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #00e676, #a5d6a7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Sidebar */
+body.dark-mode .main-sidebar,
+.dark-mode .main-sidebar,
 .main-sidebar {
-    background: rgba(10, 20, 15, 0.8) !important;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border-right: 1px solid rgba(0, 230, 118, 0.2);
+  background: var(--bg-glass-heavy) !important;
+  background-color: var(--bg-glass-heavy) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border-subtle) !important;
+  box-shadow: 4px 0 25px rgba(0, 0, 0, 0.5);
 }
 
-/* Glassmorphism for cards and widgets */
-.card, .info-box, .small-box {
-    background: rgba(10, 20, 15, 0.6) !important;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(0, 230, 118, 0.2);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
-    color: #e8f5e9 !important;
+.sidebar {
+  padding-top: 10px;
 }
 
+/* Sidebar Navigation Items */
+.nav-sidebar .nav-item > .nav-link {
+  color: var(--text-muted) !important;
+  border-radius: var(--radius-sm);
+  margin: 3px 10px;
+  padding: 10px 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover {
+  background: rgba(0, 230, 118, 0.12) !important;
+  color: #fff !important;
+  transform: translateX(4px);
+}
+
+.nav-sidebar .nav-item > .nav-link.active,
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background: linear-gradient(90deg, rgba(0, 230, 118, 0.25) 0%, rgba(0, 161, 82, 0.15) 100%) !important;
+  color: #fff !important;
+  border-left: 3px solid var(--primary-color) !important;
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.25);
+}
+
+.nav-sidebar .nav-link i {
+  color: var(--primary-color) !important;
+  margin-right: 10px;
+  text-shadow: 0 0 8px rgba(0, 230, 118, 0.4);
+}
+
+/* Cards, Info Boxes & Dashboard Widgets */
+body.dark-mode .card,
+.dark-mode .card,
+.card,
+.info-box,
+.small-box {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-card) !important;
+  color: var(--text-main) !important;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Explicitly FIX all Data Tables, Changelists, and Forms - STRICTLY NO ROTATE/TILT */
+#changelist,
+#changelist .card,
+.change-list,
+.change-list .card,
+.results,
+.table,
+.table-responsive,
+#result_list,
+.module,
+.change-form,
+.change-form .card,
+#changelist-form,
+fieldset.module {
+  transform: none !important;
+  -webkit-transform: none !important;
+  perspective: none !important;
+  transition: none !important;
+}
+
+.card:hover {
+  border-color: var(--border-glow) !important;
+}
+
+body.dark-mode .card-body,
+.dark-mode .card-body,
+.card-body {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--text-main);
+}
+
+body.dark-mode .card-header,
+.dark-mode .card-header,
 .card-header {
-    background-color: rgba(0, 230, 118, 0.1) !important;
-    border-bottom: 1px solid rgba(0, 230, 118, 0.2) !important;
+  background: rgba(0, 230, 118, 0.08) !important;
+  background-color: rgba(0, 230, 118, 0.08) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+  color: var(--text-light);
 }
 
-/* Inputs and Forms */
-.form-control, .select2-selection {
-    background: rgba(0, 0, 0, 0.4) !important;
-    border: 1px solid rgba(0, 230, 118, 0.3) !important;
-    color: #e8f5e9 !important;
+.card-title {
+  font-weight: 700;
+  color: var(--primary-color);
+  letter-spacing: 0.3px;
 }
 
-.form-control:focus {
-    border-color: #00e676 !important;
-    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+/* Timeline Activity Widget (Hoạt động gần đây) */
+body.dark-mode .timeline-item,
+.dark-mode .timeline-item,
+.timeline-item {
+  background: rgba(8, 18, 13, 0.75) !important;
+  background-color: rgba(8, 18, 13, 0.75) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-sm);
+  color: var(--text-light) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-/* Tables */
-.table {
-    color: #e8f5e9 !important;
-}
-.table td, .table th {
-    border-top: 1px solid rgba(0, 230, 118, 0.2) !important;
-}
-.table thead th {
-    border-bottom: 2px solid rgba(0, 230, 118, 0.3) !important;
+body.dark-mode .timeline-header,
+.dark-mode .timeline-header,
+.timeline-header {
+  border-bottom: 1px solid var(--border-subtle) !important;
+  color: var(--text-light) !important;
 }
 
-/* Primary buttons */
-.btn-primary, .btn-info {
-    background: linear-gradient(90deg, #00a152, #00e676) !important;
-    border: none !important;
-    color: #000 !important;
-    box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3) !important;
-}
-.btn-primary:hover, .btn-info:hover {
-    box-shadow: 0 6px 20px rgba(0, 230, 118, 0.5) !important;
+body.dark-mode .timeline-body,
+.dark-mode .timeline-body,
+.timeline-body {
+  color: var(--text-muted) !important;
 }
 
-/* Links and Accents */
+/* Light Spot for 3D Card Hover */
+.card-glow-spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, rgba(0, 230, 118, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+/* Forms & Inputs */
+.form-control,
+.select2-container--default .select2-selection--single,
+.select2-container--default .select2-selection--multiple,
+select,
+textarea {
+  background: rgba(6, 14, 10, 0.7) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-main) !important;
+  padding: 0.6rem 0.9rem;
+  transition: all 0.25s ease;
+}
+
+.form-control:focus,
+select:focus,
+textarea:focus,
+.select2-container--default.select2-container--focus .select2-selection--multiple,
+.select2-container--default.select2-container--focus .select2-selection--single {
+  background: rgba(6, 14, 10, 0.9) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.35) !important;
+  outline: none;
+}
+
+.input-group-text {
+  background: rgba(0, 230, 118, 0.1) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--primary-color) !important;
+}
+
+/* Tables (Django Admin Change List) */
+.table, #result_list {
+  color: var(--text-main) !important;
+  margin-bottom: 0;
+  background: transparent !important;
+}
+
+.table th, #result_list th {
+  background: rgba(0, 230, 118, 0.08) !important;
+  border-top: none !important;
+  border-bottom: 1px solid var(--border-glow) !important;
+  color: var(--primary-color) !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.8px;
+  padding: 12px 14px;
+}
+
+.table td, #result_list td {
+  border-top: 1px solid var(--border-subtle) !important;
+  padding: 12px 14px;
+  vertical-align: middle;
+  color: var(--text-light);
+  background: transparent !important;
+}
+
+.table tbody tr:hover, #result_list tbody tr:hover {
+  background: rgba(0, 230, 118, 0.08) !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+/* Buttons */
+.btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 0.55rem 1.1rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-primary, .btn-success {
+  background: var(--gradient-brand) !important;
+  border: none !important;
+  color: #060e0a !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3) !important;
+}
+
+.btn-primary:hover, .btn-success:hover {
+  box-shadow: var(--shadow-neon) !important;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: rgba(16, 36, 26, 0.8) !important;
+  border: 1px solid var(--border-glow) !important;
+  color: var(--primary-color) !important;
+}
+
+.btn-secondary:hover {
+  background: rgba(0, 230, 118, 0.15) !important;
+  color: #fff !important;
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.25) !important;
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.35) !important;
+}
+
+.btn-danger:hover {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6) !important;
+  transform: translateY(-2px);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  border: none !important;
+  color: #060e0a !important;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35) !important;
+}
+
+/* Badges & Tags */
+.badge {
+  font-weight: 600;
+  padding: 0.35em 0.7em;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.badge-success {
+  background: rgba(0, 230, 118, 0.18) !important;
+  border: 1px solid rgba(0, 230, 118, 0.4);
+  color: var(--primary-color) !important;
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--accent-gold) !important;
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171 !important;
+}
+
+.badge-info {
+  background: rgba(0, 180, 216, 0.18) !important;
+  border: 1px solid rgba(0, 180, 216, 0.4);
+  color: #38bdf8 !important;
+}
+
+/* Links & Breadcrumb */
 a {
-    color: #00e676;
-}
-a:hover {
-    color: #69f0ae;
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
-/* Override Jazzmin sidebar active color if needed */
-.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
-    background-color: rgba(0, 230, 118, 0.3) !important;
-    color: #fff !important;
+a:hover {
+  color: #69f0ae;
+  text-decoration: none;
+}
+
+.breadcrumb {
+  background: transparent !important;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.breadcrumb-item.active {
+  color: var(--text-muted) !important;
+}
+
+/* Filters & Changelist Tools */
+#changelist-filter {
+  background: var(--bg-glass-heavy) !important;
+  border-left: 1px solid var(--border-subtle) !important;
+  backdrop-filter: blur(15px);
+}
+
+#changelist-filter h2 {
+  background: rgba(0, 230, 118, 0.12) !important;
+  color: var(--primary-color) !important;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+#changelist-filter a {
+  color: var(--text-muted);
+}
+
+#changelist-filter li.selected a {
+  color: var(--primary-color) !important;
+  font-weight: 700;
+}
+
+/* Custom Cyber Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 230, 118, 0.25);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 230, 118, 0.1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+  box-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+}
+
+/* Pulse animation utility */
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--primary-color);
+  animation: neonPulse 2s infinite;
+}
+
+@keyframes neonPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 8px rgba(0, 230, 118, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0);
+  }
 }

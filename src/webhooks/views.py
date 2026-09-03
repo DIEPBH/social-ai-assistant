@@ -2,6 +2,7 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
+from django.shortcuts import render
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
@@ -64,6 +65,9 @@ def log_integration_webhook(system_name):
         return _wrapped_view
     return decorator
 
+
+def landing_page(request):
+    return render(request, "landing/index.html")
 
 
 @csrf_exempt

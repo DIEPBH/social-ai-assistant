@@ -1,166 +1,463 @@
 {% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Three.js (r128) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- 3D Admin Script -->
+<script src="{% static 'js/admin-3d.js' %}"></script>
+{% endblock %}
 
 {% block content %}
-<style>
-    .kpi-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: transform 0.2s, box-shadow 0.2s;
-        color: #fff;
-    }
-    .kpi-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-    }
-    .kpi-card h2 {
-        font-weight: 700;
-        margin-top: 10px;
-    }
-    .kpi-card h5 {
-        font-size: 0.9rem;
-    }
-    .kpi-icon {
-        font-size: 2.5rem;
-        opacity: 0.3;
-        position: absolute;
-        right: 20px;
-        top: 20px;
-    }
-    .bg-gradient-primary { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); }
-    .bg-gradient-info { background: linear-gradient(135deg, #36b9cc 0%, #1a8898 100%); }
-    .bg-gradient-secondary { background: linear-gradient(135deg, #858796 0%, #60616f 100%); }
-    .bg-gradient-success { background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%); }
-    .bg-gradient-warning { background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%); color: #fff;}
-    .bg-gradient-danger { background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%); }
+<div id="canvas-container"></div>
+<div class="ambient-glow ambient-glow-1"></div>
+<div class="ambient-glow ambient-glow-2"></div>
 
-    .chart-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    .chart-card .card-header {
-        background-color: #f8f9fc;
-        border-bottom: 1px solid #e3e6f0;
-        font-weight: bold;
-        color: #4e73df;
-    }
+<style>
+  /* Custom Dashboard 3D HUD Styles */
+  .dashboard-wrapper {
+    position: relative;
+    z-index: 1;
+    padding: 0.5rem 0.25rem 2rem;
+  }
+
+  /* HUD Header */
+  .hud-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+    padding: 1.25rem 1.75rem;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glow);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .hud-title-group h1 {
+    font-size: 1.65rem;
+    font-weight: 800;
+    margin: 0 0 0.4rem 0;
+    background: linear-gradient(135deg, #ffffff 0%, #00e676 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.3px;
+  }
+
+  .hud-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: rgba(0, 230, 118, 0.12);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-glow);
+  }
+
+  .hud-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .hud-clock-badge {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-light);
+    background: rgba(6, 14, 10, 0.8);
+    border: 1px solid var(--border-subtle);
+    padding: 0.45rem 1rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+  }
+
+  .hud-clock-badge i {
+    color: var(--primary-color);
+  }
+
+  /* 3D Tilt KPI Card */
+  .kpi-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1.35rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
+    transform-style: preserve-3d;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.15s ease-out, border-color 0.25s ease, box-shadow 0.25s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .kpi-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 230, 118, 0.2);
+  }
+
+  .kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.85rem;
+  }
+
+  .kpi-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+  }
+
+  .kpi-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    background: rgba(0, 230, 118, 0.1);
+    color: var(--primary-color);
+    border: 1px solid var(--border-subtle);
+    transition: all 0.25s ease;
+  }
+
+  .kpi-card:hover .kpi-icon-wrap {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 0 15px currentColor;
+  }
+
+  .kpi-val {
+    font-size: 2.2rem;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    line-height: 1.1;
+    margin-bottom: 0.35rem;
+    color: #fff;
+  }
+
+  .kpi-footer {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  /* Specific KPI Colors */
+  .kpi-card.green .kpi-icon-wrap { background: rgba(0, 230, 118, 0.12); color: #00e676; border-color: rgba(0, 230, 118, 0.3); }
+  .kpi-card.teal .kpi-icon-wrap { background: rgba(0, 180, 216, 0.12); color: #00b4d8; border-color: rgba(0, 180, 216, 0.3); }
+  .kpi-card.blue .kpi-icon-wrap { background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
+  .kpi-card.emerald .kpi-icon-wrap { background: rgba(16, 185, 129, 0.12); color: #10b981; border-color: rgba(16, 185, 129, 0.3); }
+  .kpi-card.gold .kpi-icon-wrap { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3); }
+  .kpi-card.orange .kpi-icon-wrap { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: rgba(249, 115, 22, 0.3); }
+  .kpi-card.danger .kpi-icon-wrap { background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
+  .kpi-card.danger .kpi-val { color: #f87171; text-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+  .kpi-card.purple .kpi-icon-wrap { background: rgba(168, 85, 247, 0.12); color: #a855f7; border-color: rgba(168, 85, 247, 0.3); }
+
+  /* Infrastructure Security Status HUD */
+  .infra-hud-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .infra-hud-item {
+    background: rgba(10, 22, 16, 0.65);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .infra-hud-icon {
+    font-size: 1.35rem;
+    color: var(--primary-color);
+  }
+
+  .infra-hud-info {
+    flex: 1;
+  }
+
+  .infra-hud-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .infra-hud-val {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  /* Chart Cards */
+  .chart-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-card .card-header {
+    background: rgba(0, 230, 118, 0.05) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .chart-card .card-header h5 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chart-card .card-header h5 i {
+    color: var(--primary-color);
+  }
+
+  .chart-card .card-body {
+    padding: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div class="container-fluid dashboard-wrapper">
 
-<div class="container-fluid py-3">
-
-  <h1 class="mb-4 text-gray-800 font-weight-bold">Dashboard Tổng Quan</h1>
-
-  <!-- Top KPIs -->
-  <div class="row">
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-primary mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Tin nhắn hôm nay</h5>
-          <h2>{{ messages_today }}</h2>
-          <i class="fas fa-comment-dots kpi-icon"></i>
-        </div>
+  <!-- Top Security Command Header -->
+  <div class="hud-top-bar">
+    <div class="hud-title-group">
+      <h1><i class="fa-solid fa-satellite-dish" style="color: var(--primary-color); margin-right: 0.5rem;"></i>Trung Tâm Giám Sát &amp; Điều Hành An Ninh</h1>
+      <div class="hud-status-badge">
+        <span class="pulse-dot"></span>
+        <span>LIVE OPERATIONAL HUD • ĐIỀU PHỐI THỜI GIAN THỰC</span>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-info mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Tin Zalo hôm nay</h5>
-          <h2>{{ zalo_messages_today }}</h2>
-          <i class="fas fa-comment kpi-icon"></i>
-        </div>
+    <div class="hud-actions-group">
+      <div class="hud-clock-badge">
+        <i class="fa-regular fa-clock"></i>
+        <span id="live-hud-clock">00:00:00</span>
+      </div>
+      <a href="/admin/social_messages/intakesubmission/" class="btn btn-primary btn-sm">
+        <i class="fa-solid fa-folder-open"></i> Xử lý Hồ sơ
+      </a>
+      <a href="/" target="_blank" class="btn btn-secondary btn-sm">
+        <i class="fa-solid fa-globe"></i> Xem Trang chủ
+      </a>
+    </div>
+  </div>
+
+  <!-- System Security & Infrastructure Status HUD -->
+  <div class="infra-hud-grid">
+    <div class="infra-hud-item">
+      <div class="infra-hud-icon"><i class="fa-solid fa-microchip"></i></div>
+      <div class="infra-hud-info">
+        <div class="infra-hud-label">Celery Async Worker</div>
+        <div class="infra-hud-val"><span class="pulse-dot"></span> Đang hoạt động</div>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-secondary mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Tin FB hôm nay</h5>
-          <h2>{{ facebook_messages_today }}</h2>
-          <i class="fab fa-facebook-messenger kpi-icon"></i>
-        </div>
+    <div class="infra-hud-item">
+      <div class="infra-hud-icon"><i class="fa-solid fa-shield-virus"></i></div>
+      <div class="infra-hud-info">
+        <div class="infra-hud-label">Redis Rate Limiter</div>
+        <div class="infra-hud-val"><span class="pulse-dot"></span> Bảo vệ Active</div>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-success mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Hội thoại đang mở</h5>
-          <h2>{{ open_conversations }}</h2>
-          <i class="fas fa-comments kpi-icon"></i>
-        </div>
+    <div class="infra-hud-item">
+      <div class="infra-hud-icon"><i class="fa-solid fa-bolt"></i></div>
+      <div class="infra-hud-info">
+        <div class="infra-hud-label">Độ trễ AI Intake</div>
+        <div class="infra-hud-val" style="font-family: var(--font-mono); color: var(--primary-color);">~18 ms</div>
+      </div>
+    </div>
+
+    <div class="infra-hud-item">
+      <div class="infra-hud-icon"><i class="fa-solid fa-network-wired"></i></div>
+      <div class="infra-hud-info">
+        <div class="infra-hud-label">Kênh Kết nối</div>
+        <div class="infra-hud-val"><i class="fa-brands fa-facebook-messenger" style="color: #3b82f6;"></i> FB &amp; <i class="fa-solid fa-comment-dots" style="color: #00b4d8;"></i> Zalo OA</div>
       </div>
     </div>
   </div>
 
-  <!-- Bottom KPIs -->
-  <div class="row">
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-warning mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Hồ sơ hôm nay</h5>
-          <h2>{{ submissions_today }}</h2>
-          <i class="fas fa-folder-open kpi-icon"></i>
+  <!-- Top 4 KPIs -->
+  <div class="row mb-4">
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card green">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Tin nhắn hôm nay</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-comment-dots"></i></div>
         </div>
+        <div class="kpi-val">{{ messages_today }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-arrow-trend-up"></i> Tổng lưu lượng tiếp nhận</div>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-danger mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Hồ sơ chờ phản hồi</h5>
-          <h2>{{ pending_submissions }}</h2>
-          <i class="fas fa-exclamation-circle kpi-icon"></i>
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card teal">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Tin Zalo hôm nay</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-comment"></i></div>
         </div>
+        <div class="kpi-val">{{ zalo_messages_today }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-shield-halved"></i> Zalo Official Account</div>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-dark mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Ưu tiên cao</h5>
-          <h2 class="text-danger">{{ high_priority_submissions }}</h2>
-          <i class="fas fa-fire kpi-icon"></i>
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card blue">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Tin Facebook hôm nay</span>
+          <div class="kpi-icon-wrap"><i class="fa-brands fa-facebook-messenger"></i></div>
         </div>
+        <div class="kpi-val">{{ facebook_messages_today }}</div>
+        <div class="kpi-footer"><i class="fa-brands fa-meta"></i> Messenger Webhook</div>
       </div>
     </div>
 
-    <div class="col-md-3">
-      <div class="card kpi-card bg-gradient-success mb-4 position-relative">
-        <div class="card-body">
-          <h5 class="card-title text-uppercase font-weight-bold">Báo cáo hoàn tất</h5>
-          <h2>{{ reports_completed_today }}</h2>
-          <i class="fas fa-file-excel kpi-icon"></i>
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card emerald">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Hội thoại đang mở</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-comments"></i></div>
         </div>
+        <div class="kpi-val">{{ open_conversations }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-user-group"></i> Phiên tương tác người dân</div>
       </div>
     </div>
   </div>
 
-  <!-- Charts -->
+  <!-- Bottom 4 KPIs -->
+  <div class="row mb-4">
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card gold">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Hồ sơ hôm nay</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-folder-open"></i></div>
+        </div>
+        <div class="kpi-val">{{ submissions_today }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-inbox"></i> Phản ánh đã phân loại</div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card orange">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Hồ sơ chờ phản hồi</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        </div>
+        <div class="kpi-val">{{ pending_submissions }}</div>
+        <div class="kpi-footer"><i class="fa-regular fa-clock"></i> Đang chờ cán bộ chỉ đạo</div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card danger">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Mức Ưu Tiên Cao</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-fire-flame-curved"></i></div>
+        </div>
+        <div class="kpi-val">{{ high_priority_submissions }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-radiation"></i> Cần xử lý khẩn cấp</div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+      <div class="kpi-card tilt-card purple">
+        <div class="card-glow-spot"></div>
+        <div class="kpi-top">
+          <span class="kpi-title">Báo cáo hoàn tất</span>
+          <div class="kpi-icon-wrap"><i class="fa-solid fa-file-excel"></i></div>
+        </div>
+        <div class="kpi-val">{{ reports_completed_today }}</div>
+        <div class="kpi-footer"><i class="fa-solid fa-circle-check"></i> Báo cáo tổng hợp 24h</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
   <div class="row">
-    <!-- Line Chart -->
-    <div class="col-md-8">
-      <div class="card chart-card mb-4">
-        <div class="card-header py-3">
-          <h6 class="m-0 font-weight-bold">Biểu đồ tin nhắn (7 ngày gần nhất)</h6>
+    <!-- Line Chart (7 days) -->
+    <div class="col-lg-8 mb-4">
+      <div class="chart-card tilt-card">
+        <div class="card-glow-spot"></div>
+        <div class="card-header">
+          <h5><i class="fa-solid fa-chart-area"></i> Biểu Đồ Tin Nhắn &amp; Phản Ánh (7 ngày gần nhất)</h5>
+          <span class="badge badge-success">Live Trend</span>
         </div>
         <div class="card-body">
-          <canvas id="messageChart" height="100"></canvas>
+          <div style="position: relative; height: 280px; width: 100%;">
+            <canvas id="messageChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Doughnut Chart -->
-    <div class="col-md-4">
-      <div class="card chart-card mb-4">
-        <div class="card-header py-3">
-          <h6 class="m-0 font-weight-bold">Hồ sơ theo trạng thái</h6>
+    <!-- Doughnut Chart (Status) -->
+    <div class="col-lg-4 mb-4">
+      <div class="chart-card tilt-card">
+        <div class="card-glow-spot"></div>
+        <div class="card-header">
+          <h5><i class="fa-solid fa-chart-pie"></i> Phân Bổ Trạng Thái Hồ Sơ</h5>
+          <span class="badge badge-info">Phân loại AI</span>
         </div>
         <div class="card-body">
-          <canvas id="statusChart" height="220"></canvas>
+          <div style="position: relative; height: 280px; width: 100%;">
+            <canvas id="statusChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -168,67 +465,120 @@
 
 </div>
 
-<!-- ChartJS Initialization -->
+<!-- ChartJS Cyberpunk Setup -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Parse data passed from view (injected as unquoted JSON directly via safe filter)
     const messageData = {{ message_chart_json|safe }};
     const statusData = {{ status_chart_json|safe }};
 
-    // 1. Message Line Chart
+    // 1. Message Volume Line Chart
     const msgLabels = messageData.map(item => item.day);
     const msgValues = messageData.map(item => item.total);
 
     const ctxMsg = document.getElementById('messageChart').getContext('2d');
+
+    // Create Cyber Green Gradient Fill
+    const gradientGreen = ctxMsg.createLinearGradient(0, 0, 0, 260);
+    gradientGreen.addColorStop(0, 'rgba(0, 230, 118, 0.45)');
+    gradientGreen.addColorStop(0.7, 'rgba(0, 161, 82, 0.12)');
+    gradientGreen.addColorStop(1, 'rgba(6, 14, 10, 0)');
+
     new Chart(ctxMsg, {
         type: 'line',
         data: {
-            labels: msgLabels,
+            labels: msgLabels.length ? msgLabels : ['Không có dữ liệu'],
             datasets: [{
                 label: 'Số lượng tin nhắn',
-                data: msgValues,
-                backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                borderColor: 'rgba(78, 115, 223, 1)',
-                pointBackgroundColor: 'rgba(78, 115, 223, 1)',
-                pointBorderColor: '#fff',
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: 'rgba(78, 115, 223, 1)',
+                data: msgValues.length ? msgValues : [0],
+                backgroundColor: gradientGreen,
+                borderColor: '#00e676',
+                borderWidth: 3,
+                pointBackgroundColor: '#00e676',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 8,
+                pointHoverBackgroundColor: '#ffffff',
+                pointHoverBorderColor: '#00e676',
+                pointHoverBorderWidth: 3,
                 fill: true,
-                tension: 0.3
+                tension: 0.35
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 22, 16, 0.9)',
+                    titleColor: '#00e676',
+                    bodyColor: '#f0fdf4',
+                    borderColor: 'rgba(0, 230, 118, 0.4)',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    titleFont: { family: 'Be Vietnam Pro', weight: 'bold' },
+                    bodyFont: { family: 'JetBrains Mono', size: 14 }
+                }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                x: {
+                    grid: { color: 'rgba(0, 230, 118, 0.08)', drawBorder: false },
+                    ticks: { color: '#a5d6a7', font: { family: 'JetBrains Mono', size: 11 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0, 230, 118, 0.08)', drawBorder: false },
+                    ticks: { color: '#a5d6a7', font: { family: 'JetBrains Mono', size: 11 }, stepSize: 1 }
+                }
             }
         }
     });
 
     // 2. Status Doughnut Chart
-    const statusLabels = statusData.map(item => item.status);
+    const statusLabels = statusData.map(item => item.status || 'Chưa xác định');
     const statusValues = statusData.map(item => item.total);
-    const statusColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
+    const cyberColors = ['#00e676', '#f59e0b', '#00b4d8', '#ef4444', '#10b981', '#a855f7'];
 
     const ctxStatus = document.getElementById('statusChart').getContext('2d');
     new Chart(ctxStatus, {
         type: 'doughnut',
         data: {
-            labels: statusLabels,
+            labels: statusLabels.length ? statusLabels : ['Chưa có hồ sơ'],
             datasets: [{
-                data: statusValues,
-                backgroundColor: statusColors,
-                hoverOffset: 4
+                data: statusValues.length ? statusValues : [1],
+                backgroundColor: statusLabels.length ? cyberColors.slice(0, statusLabels.length) : ['rgba(0,230,118,0.2)'],
+                borderColor: '#0a1711',
+                borderWidth: 3,
+                hoverOffset: 6
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' }
-            }
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#e8f5e9',
+                        font: { family: 'Be Vietnam Pro', size: 12 },
+                        padding: 15,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 22, 16, 0.9)',
+                    titleColor: '#00e676',
+                    bodyColor: '#f0fdf4',
+                    borderColor: 'rgba(0, 230, 118, 0.4)',
+                    borderWidth: 1,
+                    padding: 10,
+                    titleFont: { family: 'Be Vietnam Pro', weight: 'bold' }
+                }
+            },
+            cutout: '70%'
         }
     });
 });
