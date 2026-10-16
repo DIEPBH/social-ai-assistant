@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message, IntegrationLog, CustomerBlacklist
+from social_messages.models import Channel, Conversation, IntakeCategory, IntakeSubmission, Message, IntegrationLog, CustomerBlacklist, SystemConfig
 from social_messages.services.intake_router import IntakeRouter
 from social_messages.services.outbound_message_service import OutboundMessageService
 from social_messages.services.webhook_normalizer import WebhookNormalizer
@@ -324,6 +324,26 @@ def handle_citizen_incoming(conversation, payload, user_text):
             "conversation_id": conversation.id,
         }
 
+    # Quản lý Chấp thuận theo Nghị định 13/2023/NĐ-CP (Consent Toggle)
+    consent_config = SystemConfig.objects.filter(key="CONSENT_ND13_ENABLED", is_active=True).first()
+    if consent_config:
+        # BẬT: Nếu công dân chưa xác nhận, gửi câu thông báo ngắn gọn lịch sự
+        if not conversation.is_consent_nd13:
+            conversation.is_consent_nd13 = True
+            conversation.consent_at = timezone.now()
+            conversation.save(update_fields=["is_consent_nd13", "consent_at"])
+            consent_notice = (
+                "Chào bạn, Cổng tiếp nhận cam kết bảo vệ dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP "
+                "và chỉ dùng thông tin cho mục đích giải quyết phản ánh."
+            )
+            send_reply_to_platform(conversation, consent_notice)
+    else:
+        # TẮT (Mặc định): Tự động hiểu là đã chấp thuận, không gửi tin nhắn làm phiền
+        if not conversation.is_consent_nd13:
+            conversation.is_consent_nd13 = True
+            conversation.consent_at = timezone.now()
+            conversation.save(update_fields=["is_consent_nd13", "consent_at"])
+
     router = IntakeRouter()
     route_result = router.route(conversation=conversation, user_text=user_text)
 
@@ -351,10 +371,18 @@ def handle_citizen_incoming(conversation, payload, user_text):
 
         category = IntakeCategory.objects.get(id=route_result["category_id"])
 
+        from social_messages.services.civic_heatmap_service import CivicHeatmapService
+        detected_area = CivicHeatmapService.resolve_area(
+            text=f"{mapped.get('address', '')} {mapped.get('event_location', '')} {user_text}",
+            latitude=payload.get("latitude"),
+            longitude=payload.get("longitude"),
+        )
+
         submission = IntakeSubmission.objects.create(
             conversation=conversation,
             message=message,
             category=category,
+            area=detected_area,
             intent=category.code,
             citizen_name=mapped.get("citizen_name", ""),
             phone_number=mapped.get("phone_number", ""),

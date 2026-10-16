@@ -44,7 +44,7 @@ def process_message_analysis(message_id: int):
         )
 
         ai_service = AIAnalysisService()
-        ai_result = ai_service.analyze_message(message.content or "")
+        ai_result = ai_service.analyze_message(message.content or "", session_id=f"message_{message.id}")
 
         analysis.status = "processed"
         analysis.topic = ai_result.get("topic", "khác")
@@ -534,7 +534,7 @@ def process_intake_submission(submission_id: int):
                 "urgency_level": submission.urgency_level,
                 "raw_extracted_data": submission.raw_extracted_data,
             }
-            analysis_result = ai_service.analyze_message(ai_input)
+            analysis_result = ai_service.analyze_message(ai_input, session_id=f"submission_{submission.id}")
 
         result_payload = build_dynamic_intake_result(submission, analysis_result)
         reply_text = build_dynamic_reply_text(submission, analysis_result, result_payload)
@@ -555,8 +555,7 @@ def process_intake_submission(submission_id: int):
             "processing_result": result_payload,
             "outbound_result": outbound_result,
         }
-        submission.status = "responded"
-        submission.save(update_fields=[
+        fields_to_update = [
             "topic",
             "sentiment",
             "priority",
@@ -564,7 +563,21 @@ def process_intake_submission(submission_id: int):
             "response_text",
             "raw_extracted_data",
             "status",
-        ])
+        ]
+
+        if not submission.area:
+            try:
+                from social_messages.services.civic_heatmap_service import CivicHeatmapService
+                resolved_area = CivicHeatmapService.resolve_area(
+                    text=f"{submission.address or ''} {submission.event_location or ''} {submission.content or ''}"
+                )
+                if resolved_area:
+                    submission.area = resolved_area
+                    fields_to_update.append("area")
+            except Exception:
+                pass
+
+        submission.save(update_fields=fields_to_update)
 
         return {
             "status": "success",

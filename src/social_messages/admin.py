@@ -23,6 +23,8 @@ from .models import (
     Message,
     Report,
     SystemConfig,
+    PIIMaskingRule,
+    AdministrativeArea,
 )
 
 
@@ -56,6 +58,48 @@ class SystemConfigAdmin(admin.ModelAdmin):
     search_fields = ("key", "value", "description")
     list_filter = ("is_active",)
     ordering = ("key",)
+
+
+@admin.register(PIIMaskingRule)
+class PIIMaskingRuleAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "rule_type", "token_prefix", "priority", "is_active", "updated_at")
+    search_fields = ("name", "pattern", "description", "token_prefix")
+    list_filter = ("rule_type", "is_active")
+    ordering = ("priority", "id")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from .services.pii_masking_service import PIIMaskingService
+        PIIMaskingService.invalidate_cache()
+
+    def delete_model(self, request, obj):
+        super().delete_model(request, obj)
+        from .services.pii_masking_service import PIIMaskingService
+        PIIMaskingService.invalidate_cache()
+
+
+@admin.register(AdministrativeArea)
+class AdministrativeAreaAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "code",
+        "name",
+        "cluster",
+        "city",
+        "total_population_display",
+        "permanent_population",
+        "temporary_population",
+        "is_active",
+        "updated_at",
+    )
+    search_fields = ("code", "name", "cluster", "city")
+    list_filter = ("city", "cluster", "is_active")
+    ordering = ("cluster", "name")
+
+    @admin.display(description="Tổng dân số")
+    def total_population_display(self, obj):
+        return f"{obj.total_population:,} người"
+
 
 @admin.register(IntegrationLog)
 class IntegrationLogAdmin(admin.ModelAdmin):
@@ -218,10 +262,11 @@ class ConversationAdmin(admin.ModelAdmin):
         "current_category",
         "current_intent",
         "form_retry_count",
+        "is_consent_nd13",
         "updated_at",
     )
     search_fields = ("customer_id", "customer_name", "channel__name", "current_category__name")
-    list_filter = ("status", "channel", "current_state", "current_category")
+    list_filter = ("status", "channel", "is_consent_nd13", "current_state", "current_category")
 
     @admin.display(description="Trạng thái")
     def status_badge(self, obj):
@@ -406,11 +451,30 @@ class IntakeSubmissionHistoryInline(admin.TabularInline):
     def has_delete_permission(self, request, obj=None):
         return False
 
+class AreaStatusFilter(admin.SimpleListFilter):
+    title = "Trạng thái địa bàn"
+    parameter_name = "area_status"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("assigned", "Đã xác định địa bàn"),
+            ("unassigned", "⚠️ Chưa xác định địa bàn (Trên mạng/Không rõ)"),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == "assigned":
+            return queryset.filter(area__isnull=False)
+        if self.value() == "unassigned":
+            return queryset.filter(area__isnull=True)
+        return queryset
+
+
 @admin.register(IntakeSubmission)
 class IntakeSubmissionAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "category_badge",
+        "area_badge",
         "citizen_name",
         "phone_number",
         "status_badge",
@@ -418,8 +482,9 @@ class IntakeSubmissionAdmin(admin.ModelAdmin):
         "priority",
         "created_at",
     )
-    search_fields = ("citizen_name", "phone_number", "content", "category__name", "intent")
-    list_filter = ("category", "intent", "status", "processing_status", "priority", "created_at")
+    search_fields = ("citizen_name", "phone_number", "content", "category__name", "intent", "area__name")
+    list_filter = (AreaStatusFilter, "area", "category", "intent", "status", "processing_status", "priority", "created_at")
+    autocomplete_fields = ("area",)
     readonly_fields = ("raw_extracted_data", "created_at")
     inlines = [IntakeSubmissionAssignmentInline, IntakeSubmissionHistoryInline]
     change_form_template = "admin/social_messages/intakesubmission/change_form.html"
@@ -607,6 +672,17 @@ class IntakeSubmissionAdmin(admin.ModelAdmin):
         }
         label = obj.get_processing_status_display() if hasattr(obj, "get_processing_status_display") else obj.processing_status
         return badge(label, color_map.get(obj.processing_status, "secondary"))
+
+    @admin.display(description="Địa bàn quản lý")
+    def area_badge(self, obj):
+        if obj.area:
+            return format_html(
+                '<span class="badge" style="font-size: 11px; background-color: #0d6efd; color: #fff; padding: 4px 7px; border-radius: 4px; font-weight: 500;">📍 {}</span>',
+                obj.area.name
+            )
+        return format_html(
+            '<span class="badge" style="font-size: 11px; background-color: #6c757d; color: #fff; opacity: 0.85; padding: 4px 7px; border-radius: 4px;">⚠️ Chưa xác định</span>'
+        )
 
 
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin

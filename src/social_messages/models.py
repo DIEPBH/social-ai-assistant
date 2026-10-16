@@ -329,6 +329,8 @@ class Conversation(models.Model):
     current_intent = models.CharField(max_length=80, blank=True, default="", verbose_name="Mã nhóm cũ/tương thích")
     last_bot_prompt = models.TextField(blank=True, default="", verbose_name="Câu hỏi gần nhất của bot")
     form_retry_count = models.IntegerField(default=0, verbose_name="Số lần nhập lại form")
+    is_consent_nd13 = models.BooleanField(default=False, verbose_name="Đã chấp thuận NĐ 13")
+    consent_at = models.DateTimeField(blank=True, null=True, verbose_name="Thời điểm chấp thuận")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
 
@@ -451,6 +453,46 @@ class Report(models.Model):
         return f"{self.title}"
 
 
+class AdministrativeArea(models.Model):
+    code = models.CharField(max_length=50, unique=True, verbose_name="Mã địa bàn")
+    name = models.CharField(max_length=150, verbose_name="Tên phường/xã")
+    cluster = models.CharField(max_length=150, blank=True, default="", verbose_name="Cụm")
+    city = models.CharField(max_length=150, default="Thái Nguyên", verbose_name="Tỉnh/Thành phố")
+    latitude = models.FloatField(verbose_name="Vĩ độ tâm")
+    longitude = models.FloatField(verbose_name="Kinh độ tâm")
+    permanent_population = models.IntegerField(default=30000, verbose_name="Dân số thường trú")
+    temporary_population = models.IntegerField(default=10000, verbose_name="Dân số tạm trú")
+    demographics_json = models.JSONField(default=dict, blank=True, verbose_name="Cơ cấu nhân khẩu (độ tuổi)")
+    geojson_polygon = models.JSONField(default=dict, blank=True, verbose_name="Tọa độ ranh giới GeoJSON")
+    is_active = models.BooleanField(default=True, verbose_name="Đang kích hoạt")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
+
+    class Meta:
+        db_table = "administrative_areas"
+        verbose_name = "Địa bàn hành chính & Dân số"
+        verbose_name_plural = "Địa bàn hành chính & Dân số"
+        ordering = ["city", "cluster", "name"]
+
+    @property
+    def total_population(self) -> int:
+        return (self.permanent_population or 0) + (self.temporary_population or 0)
+
+    @property
+    def district(self) -> str:
+        """Thuộc tính tương thích ngược với district cũ."""
+        return self.cluster
+
+    @district.setter
+    def district(self, value: str):
+        self.cluster = value
+
+    def __str__(self):
+        if self.cluster:
+            return f"{self.name} ({self.cluster}, {self.city})"
+        return f"{self.name} ({self.city})"
+
+
 class IntakeSubmission(models.Model):
     STATUS_CHOICES = [
         ("received", "Đã tiếp nhận"),
@@ -489,6 +531,14 @@ class IntakeSubmission(models.Model):
         blank=True,
         related_name="submissions",
         verbose_name="Nhóm tiếp nhận",
+    )
+    area = models.ForeignKey(
+        AdministrativeArea,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submissions",
+        verbose_name="Địa bàn quản lý",
     )
     intent = models.CharField(max_length=80, verbose_name="Mã nhóm cũ/tương thích")
 
@@ -755,3 +805,29 @@ class SystemConfig(models.Model):
 
     def __str__(self):
         return f"{self.key} - {'BẬT' if self.is_active else 'TẮT'}"
+
+
+class PIIMaskingRule(models.Model):
+    RULE_TYPE_CHOICES = [
+        ("regex", "Biểu thức chính quy (Regex)"),
+        ("keyword", "Từ khóa chuẩn"),
+    ]
+
+    name = models.CharField(max_length=120, verbose_name="Tên quy tắc")
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPE_CHOICES, default="regex", verbose_name="Loại quy tắc")
+    pattern = models.TextField(verbose_name="Mẫu nhận diện (Pattern)")
+    token_prefix = models.CharField(max_length=50, default="PII", verbose_name="Tiền tố Token (VD: CITIZEN_ID, PHONE, PERSON_NAME, ADDRESS)")
+    priority = models.IntegerField(default=10, verbose_name="Độ ưu tiên (nhỏ áp dụng trước)")
+    is_active = models.BooleanField(default=True, verbose_name="Kích hoạt")
+    description = models.TextField(blank=True, default="", verbose_name="Mô tả")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
+
+    class Meta:
+        db_table = "pii_masking_rules"
+        verbose_name = "Quy tắc ẩn danh PII (NĐ 13)"
+        verbose_name_plural = "Quy tắc ẩn danh PII (NĐ 13)"
+        ordering = ["priority", "id"]
+
+    def __str__(self):
+        return f"{self.name} [{self.token_prefix}] ({'BẬT' if self.is_active else 'TẮT'})"

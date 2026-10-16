@@ -1,11 +1,15 @@
 import json
+import logging
 import os
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict
 
 import requests
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class AdminAIInterpreter:
@@ -101,9 +105,42 @@ class AdminAIInterpreter:
             }
         }
 
-        response = requests.post(self.url, json=payload, timeout=self.timeout)
-        response.raise_for_status()
-        data = response.json()
+        start_time = time.time()
+        error_msg = ""
+        response = None
+        data = None
+        try:
+            response = requests.post(self.url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            processing_time_ms = (time.time() - start_time) * 1000
+            resp_json = {}
+            if response:
+                try:
+                    resp_json = response.json()
+                except Exception:
+                    resp_json = {"raw_text": response.text}
+
+            safe_url = self.url.split("?key=")[0] if "?key=" in self.url else self.url
+            try:
+                from social_messages.models import IntegrationLog
+                IntegrationLog.objects.create(
+                    system="gemini_api",
+                    direction="outbound",
+                    endpoint=safe_url,
+                    method="POST",
+                    status_code=response.status_code if response else None,
+                    request_payload=payload,
+                    response_payload=resp_json,
+                    error_message=error_msg,
+                    processing_time_ms=processing_time_ms,
+                )
+            except Exception as log_err:
+                logger.error("Failed to create IntegrationLog in AdminAIInterpreter: %s", log_err)
 
         if data and "candidates" in data and len(data["candidates"]) > 0:
             message_content = data["candidates"][0]["content"]["parts"][0]["text"]

@@ -248,13 +248,13 @@
 
   // --- 3D Card Tilt (ONLY for small HUD / KPI / Login Cards, NEVER for Data Tables & Changelists) ---
   function initCardTilt() {
-    // Select strictly designated HUD cards
     const tiltCards = document.querySelectorAll('.tilt-card, .kpi-card, .tilt-box, .status-hud-card');
-
     tiltCards.forEach(card => {
-      // NEVER tilt if element is or contains tables, forms, or changelist
-      if (card.querySelector('table, form, #changelist, .results, .change-list') || 
-          card.closest('#changelist, .change-list, #changelist-form, .module, .change-form, table, form')) {
+      // NEVER tilt if element is or contains tables, forms, changelist, or maps
+      if (card.classList.contains('map-card-fixed') || 
+          card.classList.contains('no-tilt') ||
+          card.querySelector('table, form, #changelist, .results, .change-list, #civic-heatmap-map, .leaflet-container') || 
+          card.closest('#changelist, .change-list, #changelist-form, .module, .change-form, table, form, .map-card-fixed')) {
         return;
       }
 

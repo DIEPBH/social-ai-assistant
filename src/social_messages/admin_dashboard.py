@@ -7,6 +7,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Message, Conversation, IntakeSubmission, Report
+from .services.civic_heatmap_service import CivicHeatmapService
 
 
 @staff_member_required
@@ -67,6 +68,11 @@ def admin_dashboard(request):
         for item in message_chart_raw
     ]
 
+    try:
+        heatmap_data = CivicHeatmapService.get_heatmap_data(days=30, category_filter="all")
+    except Exception:
+        heatmap_data = {"status": "error", "incidents": [], "summary": {}}
+
     context = {
         "title": "Dashboard tổng quan",
         "messages_today": messages_today,
@@ -79,6 +85,7 @@ def admin_dashboard(request):
         "reports_completed_today": reports_completed_today,
         "message_chart_json": json.dumps(message_chart_data),
         "status_chart_json": json.dumps(list(status_chart_raw)),
+        "heatmap_data_json": json.dumps(heatmap_data),
     }
 
     return render(request, "admin/custom_dashboard.html", context)

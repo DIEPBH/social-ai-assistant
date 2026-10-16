@@ -2,7 +2,8 @@ import os
 import json
 import logging
 import requests
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from .pii_masking_service import PIIMaskingService
 
 logger = logging.getLogger(__name__)
 
@@ -97,17 +98,20 @@ class GeminiAnalyzer:
                         resp_json = {"raw_text": response.text}
                 
                 safe_url = url.split("?key=")[0] if "?key=" in url else url
-                IntegrationLog.objects.create(
-                    system=f"gemini_api_{model}",
-                    direction="outbound",
-                    endpoint=safe_url,
-                    method="POST",
-                    status_code=response.status_code if response else None,
-                    request_payload=payload,
-                    response_payload=resp_json,
-                    error_message=error_msg,
-                    processing_time_ms=processing_time_ms
-                )
+                try:
+                    IntegrationLog.objects.create(
+                        system="gemini_api",
+                        direction="outbound",
+                        endpoint=safe_url,
+                        method="POST",
+                        status_code=response.status_code if response else None,
+                        request_payload=payload,
+                        response_payload=resp_json,
+                        error_message=error_msg,
+                        processing_time_ms=processing_time_ms
+                    )
+                except Exception as log_err:
+                    logger.error("Failed to create IntegrationLog in GeminiAnalyzer: %s", log_err)
             
             if success:
                 break
@@ -124,8 +128,9 @@ class GeminiAnalyzer:
             logger.error("Gemini API returned unexpected format: %s", data)
             raise RuntimeError("No candidates found in Gemini response")
 
-    def analyze_message(self, content: str) -> Dict[str, Any]:
+    def analyze_message(self, content: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         dynamic_topics = self._get_dynamic_topics_text()
+        masked_content, token_map = PIIMaskingService.mask_pii(content, session_id=session_id)
 
         prompt = (
             "Bạn là trợ lý AI cho hệ thống tiếp nhận tin nhắn của cơ quan nhà nước.\n"
@@ -135,16 +140,19 @@ class GeminiAnalyzer:
             "sentiment chỉ được là: tích cực, trung lập, tiêu cực.\n"
             "priority chỉ được là: low, normal, high.\n"
             "summary phải ngắn gọn, rõ nghĩa, bằng tiếng Việt.\n\n"
-            f"Nội dung cần phân tích:\n{content}"
+            f"Nội dung cần phân tích:\n{masked_content}"
         )
-        return self._call_api(prompt, json_response=True)
+        raw_result = self._call_api(prompt, json_response=True)
+        return PIIMaskingService.demask_data(raw_result, session_id=session_id, mapping=token_map)
 
-    def extract_entities(self, text: str, fields: list) -> Dict[str, str]:
+    def extract_entities(self, text: str, fields: list, session_id: Optional[str] = None) -> Dict[str, str]:
         fields_desc = []
         for f in fields:
             fields_desc.append(f"- {f.field_key}: {f.label} ({f.help_text or 'Không có ghi chú'})")
         fields_str = "\n".join(fields_desc)
         
+        masked_text, token_map = PIIMaskingService.mask_pii(text, session_id=session_id)
+
         prompt = (
             "Bạn là một trợ lý AI thông minh làm nhiệm vụ rút trích dữ liệu từ tin nhắn của người dân.\n"
             "Người dân có thể gửi nhiều tin nhắn được nối với nhau, hoặc gửi một đoạn văn dài. "
@@ -152,21 +160,24 @@ class GeminiAnalyzer:
             "Danh sách các trường cần trích xuất (nếu không có thông tin trong tin nhắn thì để chuỗi rỗng ''):\n"
             f"{fields_str}\n\n"
             "Hãy phân tích nội dung sau và trả về DUY NHẤT một JSON hợp lệ, các khóa trong JSON phải là các field_key ở trên.\n\n"
-            f"Nội dung người dân gửi:\n{text}"
+            f"Nội dung người dân gửi:\n{masked_text}"
         )
-        return self._call_api(prompt, json_response=True)
+        raw_result = self._call_api(prompt, json_response=True)
+        return PIIMaskingService.demask_data(raw_result, session_id=session_id, mapping=token_map)
 
-    def generate_followup_question(self, user_text: str, missing_fields: list, category_name: str) -> str:
+    def generate_followup_question(self, user_text: str, missing_fields: list, category_name: str, session_id: Optional[str] = None) -> str:
         missing_str = ", ".join(missing_fields)
+        masked_text, token_map = PIIMaskingService.mask_pii(user_text, session_id=session_id)
         prompt = (
             "Bạn là một tổng đài viên AI lịch sự và thân thiện của nhà nước, phụ trách tiếp nhận phản ánh về mảng: " f"{category_name}.\n"
             "Hệ thống đã nhận thông tin từ người dân nhưng vẫn CÒN THIẾU các thông tin quan trọng sau: " f"{missing_str}.\n\n"
             "Dựa trên nội dung người dân đã gửi:\n"
-            f"\"{user_text}\"\n\n"
+            f"\"{masked_text}\"\n\n"
             "Hãy viết MỘT câu trả lời ngắn gọn (dưới 40 chữ), xác nhận đã nhận thông tin và nhẹ nhàng yêu cầu người dân bổ sung thêm các thông tin còn thiếu. "
             "Không thêm các từ thừa như 'Dạ' ở đầu câu một cách máy móc nếu không cần thiết, tự nhiên như người bình thường nhắn tin."
         )
-        return self._call_api(prompt, json_response=False)
+        raw_result = self._call_api(prompt, json_response=False)
+        return PIIMaskingService.demask_data(raw_result, session_id=session_id, mapping=token_map)
 
     def _get_dynamic_topics_text(self) -> str:
         try:
